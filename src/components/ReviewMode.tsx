@@ -160,6 +160,12 @@ export default function ReviewMode({ words, mode, onClose }: ReviewModeProps) {
                 {currentWord.word}
               </h1>
 
+              {mode === 'learn' && currentWord.scaffold_prompt && !showContent && (
+                <p className="text-zinc-400 text-lg mb-8 leading-relaxed max-w-xl mx-auto">
+                  {currentWord.scaffold_prompt}
+                </p>
+              )}
+
               {mode === 'revise' && !showContent && (
                 <p className="text-zinc-400 text-lg mb-8 italic">
                   {currentPrompt.prompt}
