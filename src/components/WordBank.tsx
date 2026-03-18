@@ -30,28 +30,9 @@ interface WordBankProps {
   practiceWord: (id: string, userSentence: string) => Promise<void>;
   isReadOnly?: boolean;
   weeklyMode?: boolean;
+  weeklySelected?: string[];
+  onToggleWeeklySelect?: (id: string) => void;
   onWeeklyClose?: () => void;
-}
-
-const WEEKLY_KEY = 'weekly-challenge';
-function loadWeeklySelected(): string[] {
-  try {
-    const raw = localStorage.getItem(WEEKLY_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    const thisMonday = (() => {
-      const d = new Date(); const day = d.getDay();
-      d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); d.setHours(0,0,0,0);
-      return d.toISOString().split('T')[0];
-    })();
-    return parsed.weekStart === thisMonday ? (parsed.selected || []) : [];
-  } catch { return []; }
-}
-function saveWeeklySelected(selected: string[]) {
-  const d = new Date(); const day = d.getDay();
-  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); d.setHours(0,0,0,0);
-  const weekStart = d.toISOString().split('T')[0];
-  localStorage.setItem(WEEKLY_KEY, JSON.stringify({ selected, weekStart }));
 }
 
 interface ContextMenuState {
@@ -73,16 +54,10 @@ function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> 
   return { category: 'KNOW_WELL' };
 }
 
-export default function WordBank({ words, updateWord, deleteWord, practiceWord, isReadOnly = false, weeklyMode = false, onWeeklyClose }: WordBankProps) {
-  const [weeklySelected, setWeeklySelected] = useState<string[]>(loadWeeklySelected);
-
+export default function WordBank({ words, updateWord, deleteWord, practiceWord, isReadOnly = false, weeklyMode = false, weeklySelected = [], onToggleWeeklySelect, onWeeklyClose }: WordBankProps) {
   const toggleWeeklySelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setWeeklySelected(prev => {
-      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      saveWeeklySelected(next);
-      return next;
-    });
+    onToggleWeeklySelect?.(id);
   };
 
   // When weeklyMode activates, jump to Use More Often section
@@ -461,26 +436,25 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
 
       {/* Weekly mode floating bar */}
       {weeklyMode && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-zinc-800 border border-zinc-700 rounded-full px-5 py-3 shadow-2xl">
-          <span className="text-sm text-zinc-400">
-            {weeklySelected.length === 0
-              ? 'Tap words to select'
-              : `${weeklySelected.length} word${weeklySelected.length === 1 ? '' : 's'} selected`}
-          </span>
-          {weeklySelected.length > 0 && (
-            <button
-              onClick={() => { saveWeeklySelected([]); setWeeklySelected([]); }}
-              className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
-            >
-              Clear
-            </button>
-          )}
-          <button
-            onClick={onWeeklyClose}
-            className="text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors"
-          >
-            Done
-          </button>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 shadow-2xl max-w-sm w-full mx-4">
+          <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
+            Select words to focus on using in your speech this week. <span className="text-zinc-500">We recommend starting with 3.</span>
+          </p>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-300">
+              {weeklySelected.length === 0 ? 'None selected yet' : `${weeklySelected.length} word${weeklySelected.length === 1 ? '' : 's'} selected`}
+            </span>
+            <div className="flex items-center gap-3">
+              {weeklySelected.length > 0 && (
+                <button onClick={() => onToggleWeeklySelect?.('__clear__')} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+                  Clear
+                </button>
+              )}
+              <button onClick={onWeeklyClose} className="text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors">
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
