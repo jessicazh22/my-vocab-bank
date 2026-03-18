@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../lib/hooks';
 
-export default function Auth() {
+export default function Auth({ onCancel }: { onCancel?: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -67,6 +67,16 @@ export default function Auth() {
           >
             {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
           </button>
+
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-full text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              ← Back
+            </button>
+          )}
         </form>
       </div>
     </div>

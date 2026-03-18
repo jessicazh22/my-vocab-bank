@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface Particle {
   id: number;
@@ -17,8 +17,10 @@ const CELEBRATION_COLORS = [
   '#FFB347', // warm orange
   '#FF6B6B', // coral red
   '#FFE66D', // golden yellow
+  '#5ED4A5', // mint green
+  '#7BC8F6', // sky blue
+  '#C4A1FF', // soft purple
   '#FF8E72', // salmon
-  '#FFA07A', // light salmon
   '#FFCC5C', // sunflower
 ];
 
@@ -57,6 +59,8 @@ export default function Confetti({
   onComplete
 }: ConfettiProps) {
   const [particles, setParticles] = useState<Particle[]>([]);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
     if (!active) return;
@@ -86,13 +90,13 @@ export default function Confetti({
         frame = requestAnimationFrame(animate);
       } else {
         setParticles([]);
-        onComplete?.();
+        onCompleteRef.current?.();
       }
     };
 
     frame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frame);
-  }, [active, originX, originY, particleCount, onComplete]);
+  }, [active, originX, originY, particleCount]);
 
   if (particles.length === 0) return null;
 

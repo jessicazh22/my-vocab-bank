@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { VocabularyWord } from '../lib/supabase';
 import { Trash2, BookOpen, RotateCcw, BookMarked, Heart } from 'lucide-react';
 import WordDetail from './WordDetail';
@@ -21,13 +21,14 @@ function getTagColor(tag: string) {
   return SOURCE_TAG_COLORS[Math.abs(hash) % SOURCE_TAG_COLORS.length];
 }
 
-type Category = 'KNOW_WELL' | 'LEARNING' | 'JUST_ADDED';
-type Familiarity = 'NEED_TO_LEARN' | 'NEED_TO_USE';
+type NavSection = 'NEED_TO_LEARN' | 'NEED_TO_USE' | 'KNOW_WELL';
 
 interface WordBankProps {
   words: VocabularyWord[];
   updateWord: (id: string, updates: Partial<VocabularyWord>) => Promise<void>;
   deleteWord: (id: string) => Promise<void>;
+  practiceWord: (id: string, userSentence: string) => Promise<void>;
+  isReadOnly?: boolean;
 }
 
 interface ContextMenuState {
@@ -37,18 +38,23 @@ interface ContextMenuState {
   wordId: string | null;
 }
 
-const CATEGORIES: { key: Category; label: string }[] = [
-  { key: 'JUST_ADDED', label: 'Just Added' },
-  { key: 'LEARNING', label: 'Learning' },
-  { key: 'KNOW_WELL', label: 'Know Well' },
+const NAV_SECTIONS: { key: NavSection; label: string; icon: 'book' | 'rotate' | 'check' }[] = [
+  { key: 'NEED_TO_LEARN', label: 'Need to Learn', icon: 'book' },
+  { key: 'NEED_TO_USE',   label: 'Use More Often', icon: 'rotate' },
+  { key: 'KNOW_WELL',     label: 'Know Well', icon: 'check' },
 ];
 
-export default function WordBank({ words, updateWord, deleteWord }: WordBankProps) {
+function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> {
+  if (section === 'NEED_TO_LEARN') return { category: 'LEARNING', familiarity: 'NEED_TO_LEARN' };
+  if (section === 'NEED_TO_USE')   return { category: 'LEARNING', familiarity: 'NEED_TO_USE' };
+  return { category: 'KNOW_WELL' };
+}
+
+export default function WordBank({ words, updateWord, deleteWord, practiceWord, isReadOnly = false }: WordBankProps) {
   const [activeSection, setActiveSection] = useState<'words' | 'sentences'>('words');
-  const [activeCategory, setActiveCategory] = useState<Category>('JUST_ADDED');
+  const [activeNavSection, setActiveNavSection] = useState<NavSection>('NEED_TO_LEARN');
   const [selectedWord, setSelectedWord] = useState<VocabularyWord | null>(null);
-  const [dragOverCategory, setDragOverCategory] = useState<Category | null>(null);
-  const [dragOverFamiliarity, setDragOverFamiliarity] = useState<Familiarity | null>(null);
+  const [dragOverSection, setDragOverSection] = useState<NavSection | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
     x: 0,
@@ -75,19 +81,13 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
   const wordsAndPhrases = words.filter((w) => w.word_type !== 'sentence');
   const sentences = words.filter((w) => w.word_type === 'sentence');
 
-  const getWordsByCategory = (category: Category) => {
-    return wordsAndPhrases.filter((w) => w.category === category);
+  const getWordsForSection = (section: NavSection) => {
+    if (section === 'NEED_TO_LEARN') return wordsAndPhrases.filter(w => w.category === 'LEARNING' && w.familiarity === 'NEED_TO_LEARN');
+    if (section === 'NEED_TO_USE')   return wordsAndPhrases.filter(w => w.category === 'LEARNING' && w.familiarity === 'NEED_TO_USE');
+    return wordsAndPhrases.filter(w => w.category === 'KNOW_WELL');
   };
 
-  const getLearningWordsByFamiliarity = (familiarity: Familiarity) => {
-    return wordsAndPhrases.filter(
-      (w) => w.category === 'LEARNING' && w.familiarity === familiarity
-    );
-  };
-
-  const activeWords = getWordsByCategory(activeCategory);
-  const needToLearnWords = getLearningWordsByFamiliarity('NEED_TO_LEARN');
-  const needToUseWords = getLearningWordsByFamiliarity('NEED_TO_USE');
+  const activeWords = getWordsForSection(activeNavSection);
 
   const handleDragStart = (e: React.DragEvent, wordId: string) => {
     e.dataTransfer.setData('wordId', wordId);
@@ -99,21 +99,12 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDropOnCategory = async (e: React.DragEvent, category: Category) => {
+  const handleDropOnSection = async (e: React.DragEvent, section: NavSection) => {
     e.preventDefault();
-    setDragOverCategory(null);
+    setDragOverSection(null);
     const wordId = e.dataTransfer.getData('wordId');
     if (wordId) {
-      await updateWord(wordId, { category });
-    }
-  };
-
-  const handleDropOnFamiliarity = async (e: React.DragEvent, familiarity: Familiarity) => {
-    e.preventDefault();
-    setDragOverFamiliarity(null);
-    const wordId = e.dataTransfer.getData('wordId');
-    if (wordId) {
-      await updateWord(wordId, { familiarity });
+      await updateWord(wordId, getWordUpdatesForSection(section));
     }
   };
 
@@ -135,19 +126,28 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
     }
   };
 
-  const handleFamiliarityToggle = async (e: React.MouseEvent, wordId: string, newFamiliarity: Familiarity) => {
+  const [exitingWordId, setExitingWordId] = useState<string | null>(null);
+
+  const handleConfettiComplete = useCallback(() => {
+    setConfettiOrigin(null);
+  }, []);
+
+  const handleMoveToSection = async (e: React.MouseEvent, wordId: string, targetSection: NavSection) => {
     e.stopPropagation();
 
-    if (newFamiliarity === 'NEED_TO_USE') {
+    if (targetSection === 'NEED_TO_USE') {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       setConfettiOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
     }
 
     setCelebratingWordId(wordId);
+    setExitingWordId(wordId);
+
     setTimeout(async () => {
-      await updateWord(wordId, { familiarity: newFamiliarity });
+      await updateWord(wordId, getWordUpdatesForSection(targetSection));
       setCelebratingWordId(null);
-    }, 500);
+      setExitingWordId(null);
+    }, 600);
   };
 
   const toggleFavoriteSource = (e: React.MouseEvent, sourceTag: string) => {
@@ -190,39 +190,41 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
     };
   }, [contextMenu.visible]);
 
-  const renderWordCard = (word: VocabularyWord, isNeedToUse = false) => {
+  const renderWordCard = (word: VocabularyWord, section: NavSection = 'NEED_TO_LEARN') => {
     const isCelebrating = celebratingWordId === word.id;
+    const isExiting = exitingWordId === word.id;
     const tagColor = word.source_tag ? getTagColor(word.source_tag) : null;
+    const isNeedToUse = section === 'NEED_TO_USE';
 
     return (
       <div
         key={word.id}
-        draggable
-        onDragStart={(e) => handleDragStart(e, word.id)}
+        draggable={!isReadOnly}
+        onDragStart={!isReadOnly ? (e) => handleDragStart(e, word.id) : undefined}
         onClick={() => setSelectedWord(word)}
-        onContextMenu={(e) => handleContextMenu(e, word.id)}
-        className={`group relative bg-zinc-800/50 border rounded-lg p-4 transition-all cursor-grab active:cursor-grabbing ${
+        onContextMenu={!isReadOnly ? (e) => handleContextMenu(e, word.id) : undefined}
+        className={`group relative bg-zinc-800/50 border rounded-lg p-4 transition-all ${
+          isReadOnly ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+        } ${
           isNeedToUse ? 'border-teal-900/30 hover:border-teal-800/50' : 'border-zinc-700/50 hover:border-zinc-600'
-        } ${isCelebrating ? 'animate-celebrate' : ''}`}
+        } ${isCelebrating ? 'animate-celebrate' : ''} ${isExiting ? 'animate-card-exit' : 'animate-card-enter'}`}
       >
-        <button
-          onClick={(e) => handleFamiliarityToggle(
-            e,
-            word.id,
-            isNeedToUse ? 'NEED_TO_LEARN' : 'NEED_TO_USE'
-          )}
-          className={`absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all ${
-            isNeedToUse
-              ? 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'
-              : 'text-zinc-500 hover:text-teal-400 hover:bg-teal-500/10'
-          }`}
-          title={isNeedToUse ? 'Move back to Need to Learn' : 'I know this!'}
-        >
-          {isNeedToUse ? <RotateCcw size={14} /> : <BookOpen size={14} />}
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={(e) => handleMoveToSection(e, word.id, isNeedToUse ? 'NEED_TO_LEARN' : 'NEED_TO_USE')}
+            className={`absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all ${
+              isNeedToUse
+                ? 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'
+                : 'text-zinc-500 hover:text-teal-400 hover:bg-teal-500/10'
+            }`}
+            title={isNeedToUse ? 'Move back to Need to Learn' : 'Move to Use More Often'}
+          >
+            {isNeedToUse ? <RotateCcw size={14} /> : <BookOpen size={14} />}
+          </button>
+        )}
         <div className="flex-1 min-w-0 pr-6">
           <div className="text-zinc-100 text-sm">{word.word}</div>
-          <div className="text-zinc-500 text-xs leading-relaxed mt-1 line-clamp-2">
+          <div className="text-zinc-500 text-xs leading-relaxed mt-1 line-clamp-1">
             {word.definition}
           </div>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -234,6 +236,7 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
             {word.source_tag && tagColor && (
               <button
                 onClick={(e) => toggleFavoriteSource(e, word.source_tag!)}
+                title={isFavoriteSource(word.source_tag) ? 'Unfavorite source' : 'Favorite this source'}
                 className={`group/tag inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-all ${tagColor.bg} ${tagColor.text} border ${tagColor.border} ${
                   isFavoriteSource(word.source_tag) ? 'source-tag-favorite' : ''
                 }`}
@@ -282,23 +285,20 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
 
             {activeSection === 'words' && (
               <div className="space-y-1">
-                {CATEGORIES.map(({ key, label }) => (
+                {NAV_SECTIONS.map(({ key, label }) => (
                   <button
                     key={key}
-                    onClick={() => setActiveCategory(key)}
-                    onDragOver={(e) => {
-                      handleDragOver(e);
-                      setDragOverCategory(key);
-                    }}
-                    onDragLeave={() => setDragOverCategory(null)}
-                    onDrop={(e) => handleDropOnCategory(e, key)}
+                    onClick={() => setActiveNavSection(key)}
+                    onDragOver={(e) => { handleDragOver(e); setDragOverSection(key); }}
+                    onDragLeave={() => setDragOverSection(null)}
+                    onDrop={(e) => handleDropOnSection(e, key)}
                     className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      activeCategory === key
+                      activeNavSection === key
                         ? 'bg-zinc-800 text-zinc-100'
                         : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
-                    } ${dragOverCategory === key ? 'ring-2 ring-teal-500/50 bg-zinc-800/60' : ''}`}
+                    } ${dragOverSection === key ? 'ring-2 ring-teal-500/50 bg-zinc-800/60' : ''}`}
                   >
-                    {label}
+                    <span>{label}</span>
                   </button>
                 ))}
               </div>
@@ -309,120 +309,12 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
         <main className="flex-1 min-w-0">
           {activeSection === 'words' ? (
             <>
-              {activeCategory === 'LEARNING' ? (
-                <div className="space-y-8">
-                  <div
-                    onDragOver={(e) => {
-                      handleDragOver(e);
-                      setDragOverFamiliarity('NEED_TO_LEARN');
-                    }}
-                    onDragLeave={() => setDragOverFamiliarity(null)}
-                    onDrop={(e) => handleDropOnFamiliarity(e, 'NEED_TO_LEARN')}
-                    className={`rounded-lg transition-all ${
-                      dragOverFamiliarity === 'NEED_TO_LEARN' ? 'ring-2 ring-amber-500/30 bg-amber-500/5' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-zinc-800">
-                      <BookOpen size={12} className="text-amber-500" />
-                      <h3 className="text-xs uppercase tracking-wider text-zinc-500 font-medium">
-                        Need to Learn
-                      </h3>
-                      <span className="text-xs text-zinc-600">({needToLearnWords.length})</span>
-                    </div>
-                    {needToLearnWords.length === 0 ? (
-                      <div className="text-zinc-600 text-sm italic py-4">
-                        {dragOverFamiliarity === 'NEED_TO_LEARN' ? 'Drop here' : 'No words here'}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {needToLearnWords.map((word) => renderWordCard(word))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div
-                    onDragOver={(e) => {
-                      handleDragOver(e);
-                      setDragOverFamiliarity('NEED_TO_USE');
-                    }}
-                    onDragLeave={() => setDragOverFamiliarity(null)}
-                    onDrop={(e) => handleDropOnFamiliarity(e, 'NEED_TO_USE')}
-                    className={`rounded-lg transition-all ${
-                      dragOverFamiliarity === 'NEED_TO_USE' ? 'ring-2 ring-teal-500/30 bg-teal-500/5' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-zinc-800">
-                      <RotateCcw size={12} className="text-teal-500" />
-                      <h3 className="text-xs uppercase tracking-wider text-zinc-500 font-medium">
-                        Use More Often
-                      </h3>
-                      <span className="text-xs text-zinc-600">({needToUseWords.length})</span>
-                    </div>
-                    {needToUseWords.length === 0 ? (
-                      <div className="text-zinc-600 text-sm italic py-4">
-                        {dragOverFamiliarity === 'NEED_TO_USE' ? 'Drop here' : 'No words here'}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {needToUseWords.map((word) => renderWordCard(word, true))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+              {activeWords.length === 0 ? (
+                <div className="text-zinc-600 text-sm italic py-8">No words here yet</div>
               ) : (
-                <>
-                  {activeWords.length === 0 ? (
-                    <div className="text-zinc-600 text-sm italic py-8">No words in this category yet</div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {activeWords.map((word) => {
-                        const tagColor = word.source_tag ? getTagColor(word.source_tag) : null;
-                        return (
-                          <div
-                            key={word.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, word.id)}
-                            onClick={() => setSelectedWord(word)}
-                            onContextMenu={(e) => handleContextMenu(e, word.id)}
-                            className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors cursor-grab active:cursor-grabbing"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="text-zinc-100 text-sm">{word.word}</div>
-                              <div className="text-zinc-500 text-xs leading-relaxed mt-1 line-clamp-2">
-                                {word.definition}
-                              </div>
-                              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                {word.word_type === 'phrase' && (
-                                  <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">
-                                    phrase
-                                  </span>
-                                )}
-                                {word.source_tag && tagColor && (
-                                  <button
-                                    onClick={(e) => toggleFavoriteSource(e, word.source_tag!)}
-                                    className={`group/tag inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-all ${tagColor.bg} ${tagColor.text} border ${tagColor.border} ${
-                                      isFavoriteSource(word.source_tag) ? 'source-tag-favorite' : ''
-                                    }`}
-                                  >
-                                    {isFavoriteSource(word.source_tag) ? (
-                                      <Heart size={9} className="fill-current animate-heartbeat" />
-                                    ) : (
-                                      <BookMarked size={9} className="group-hover/tag:hidden" />
-                                    )}
-                                    {!isFavoriteSource(word.source_tag) && (
-                                      <Heart size={9} className="hidden group-hover/tag:block" />
-                                    )}
-                                    {word.source_tag}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {activeWords.map((word) => renderWordCard(word, activeNavSection))}
+                </div>
               )}
             </>
           ) : (
@@ -450,6 +342,7 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
                           {sentence.source_tag && tagColor && (
                             <button
                               onClick={(e) => toggleFavoriteSource(e, sentence.source_tag!)}
+                              title={isFavoriteSource(sentence.source_tag) ? 'Unfavorite source' : 'Favorite this source'}
                               className={`group/tag inline-flex items-center gap-1 mt-3 px-2 py-1 rounded text-[10px] transition-all ${tagColor.bg} ${tagColor.text} border ${tagColor.border} ${
                                 isFavoriteSource(sentence.source_tag) ? 'source-tag-favorite' : ''
                               }`}
@@ -476,7 +369,7 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
         </main>
       </div>
 
-      {contextMenu.visible && (
+      {!isReadOnly && contextMenu.visible && (
         <div
           ref={contextMenuRef}
           style={{ top: contextMenu.y, left: contextMenu.x }}
@@ -493,14 +386,20 @@ export default function WordBank({ words, updateWord, deleteWord }: WordBankProp
       )}
 
       {selectedWord && (
-        <WordDetail word={selectedWord} onClose={() => setSelectedWord(null)} />
+        <WordDetail
+          word={selectedWord}
+          onClose={() => setSelectedWord(null)}
+          updateWord={updateWord}
+          practiceWord={practiceWord}
+          isReadOnly={isReadOnly}
+        />
       )}
 
       <Confetti
         active={confettiOrigin !== null}
         originX={confettiOrigin?.x}
         originY={confettiOrigin?.y}
-        onComplete={() => setConfettiOrigin(null)}
+        onComplete={handleConfettiComplete}
       />
     </>
   );

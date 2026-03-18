@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { VocabularyWord, ChatMessage } from '../lib/supabase';
-import { useVocabulary, useWordChat } from '../lib/hooks';
+import { useWordChat } from '../lib/hooks';
 import { X, Sparkles, Loader2, Send, MessageCircle } from 'lucide-react';
 
 type ReviewType = 'learn' | 'revise';
@@ -9,6 +9,7 @@ interface ReviewModeProps {
   words: VocabularyWord[];
   mode: ReviewType;
   onClose: () => void;
+  practiceWord: (id: string, userSentence: string) => Promise<void>;
 }
 
 const REVISE_PROMPTS = [
@@ -24,7 +25,7 @@ function getRandomPrompt() {
   return REVISE_PROMPTS[Math.floor(Math.random() * REVISE_PROMPTS.length)];
 }
 
-export default function ReviewMode({ words, mode, onClose }: ReviewModeProps) {
+export default function ReviewMode({ words, mode, onClose, practiceWord }: ReviewModeProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showContent, setShowContent] = useState(false);
   const [userSentence, setUserSentence] = useState('');
@@ -32,7 +33,6 @@ export default function ReviewMode({ words, mode, onClose }: ReviewModeProps) {
   const [reviseNote, setReviseNote] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const { practiceWord } = useVocabulary();
 
   const reviewWords = mode === 'learn'
     ? words.filter((w) => (w.category === 'LEARNING' || w.category === 'JUST_ADDED') && w.word_type !== 'sentence')

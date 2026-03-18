@@ -58,9 +58,29 @@ function detectWordType(text: string): 'word' | 'phrase' | 'sentence' {
   return 'word';
 }
 
+// Fields that are safe to send to Supabase update
+const DB_UPDATE_FIELDS = new Set([
+  'word', 'definition', 'example_sentence', 'context', 'usage_hint',
+  'source_tag', 'sentence_starters', 'scaffold_prompt', 'category',
+  'word_type', 'familiarity', 'practice_count', 'last_practiced',
+  'user_sentences', 'added_date', 'is_public',
+]);
+
+function sanitizeUpdates(updates: Partial<VocabularyWord>): Record<string, unknown> {
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (DB_UPDATE_FIELDS.has(key)) {
+      clean[key] = value;
+    }
+  }
+  return clean;
+}
+
 export function useVocabulary() {
   const [words, setWords] = useState<VocabularyWord[]>([]);
   const [loading, setLoading] = useState(true);
+  // Track in-flight saves to prevent real-time subscription from overwriting
+  const savingRef = { current: new Set<string>() };
 
   const fetchWords = async () => {
     const { data, error } = await supabase
@@ -69,7 +89,18 @@ export function useVocabulary() {
       .order('added_date', { ascending: false });
 
     if (!error && data) {
-      setWords(data);
+      // Merge: don't overwrite words that are currently being saved
+      setWords(prev => {
+        if (savingRef.current.size === 0) return data;
+        return data.map(fetchedWord => {
+          if (savingRef.current.has(fetchedWord.id)) {
+            // Keep the optimistic local version while save is in flight
+            const localVersion = prev.find(w => w.id === fetchedWord.id);
+            return localVersion || fetchedWord;
+          }
+          return fetchedWord;
+        });
+      });
     }
     setLoading(false);
   };
@@ -107,40 +138,67 @@ export function useVocabulary() {
   const addWord = async (
     word: string,
     definition: string,
-    exampleSentence?: string,
-    context?: string,
-    usageHint?: string,
-    sourceTag?: string,
-    scaffoldPrompt?: string
+    options?: {
+      exampleSentence?: string;
+      context?: string;
+      usageHint?: string;
+      sourceTag?: string;
+      scaffoldPrompt?: string;
+      wordType?: 'word' | 'phrase' | 'sentence';
+    }
   ) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const cleanedWord = cleanWordText(word);
-    const wordType = detectWordType(cleanedWord);
+    const cleanedWord = options?.wordType === 'sentence' ? word.trim() : cleanWordText(word);
+    const wordType = options?.wordType || detectWordType(cleanedWord);
 
-    await supabase.from('vocabulary').insert({
+    const { data: newWord, error } = await supabase.from('vocabulary').insert({
       user_id: user.id,
       word: cleanedWord,
       definition,
-      example_sentence: exampleSentence,
-      context,
-      usage_hint: usageHint,
-      source_tag: sourceTag,
-      scaffold_prompt: scaffoldPrompt,
-      category: 'JUST_ADDED',
+      example_sentence: options?.exampleSentence,
+      context: options?.context,
+      usage_hint: options?.usageHint,
+      source_tag: options?.sourceTag,
+      scaffold_prompt: options?.scaffoldPrompt,
+      category: 'LEARNING',
       word_type: wordType,
-    });
+    }).select().single();
+
+    if (error) {
+      console.error('Failed to add word:', error);
+    } else if (newWord) {
+      // Immediately prepend to state — don't wait for real-time subscription
+      setWords(prev => [newWord, ...prev]);
+    }
   };
 
   const updateWord = async (id: string, updates: Partial<VocabularyWord>) => {
+    // Optimistic update
     setWords((prev) =>
       prev.map((w) => (w.id === id ? { ...w, ...updates } : w))
     );
-    await supabase
+
+    // Mark as saving so real-time subscription doesn't overwrite
+    savingRef.current.add(id);
+
+    const cleanUpdates = sanitizeUpdates(updates);
+    const { error } = await supabase
       .from('vocabulary')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...cleanUpdates, updated_at: new Date().toISOString() })
       .eq('id', id);
+
+    // Clear saving flag after a short delay to let real-time catch up
+    setTimeout(() => {
+      savingRef.current.delete(id);
+    }, 2000);
+
+    if (error) {
+      console.error('Failed to save word update:', error);
+      // Revert optimistic update on failure
+      fetchWords();
+    }
   };
 
   const deleteWord = async (id: string) => {
@@ -155,9 +213,7 @@ export function useVocabulary() {
     const newUserSentences = [...word.user_sentences, userSentence];
 
     let newCategory = word.category;
-    if (word.category === 'JUST_ADDED' && newPracticeCount >= 1) {
-      newCategory = 'LEARNING';
-    } else if (word.category === 'LEARNING' && newPracticeCount >= 3) {
+    if (word.category === 'LEARNING' && newPracticeCount >= 3) {
       newCategory = 'KNOW_WELL';
     }
 

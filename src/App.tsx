@@ -9,11 +9,12 @@ import { Plus, Play, LogOut } from 'lucide-react';
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { words, loading: wordsLoading, updateWord, deleteWord } = useVocabulary();
+  const { words, loading: wordsLoading, addWord, checkDuplicate, updateWord, deleteWord, practiceWord } = useVocabulary();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showLearn, setShowLearn] = useState(false);
   const [showRevise, setShowRevise] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
 
   if (authLoading) {
     return (
@@ -23,9 +24,12 @@ function App() {
     );
   }
 
-  if (!user) {
-    return <Auth />;
+  // Show login page when explicitly requested
+  if (showAuth && !user) {
+    return <Auth onCancel={() => setShowAuth(false)} />;
   }
+
+  const isReadOnly = !user;
 
   const learnWords = words.filter(
     (w) => (w.category === 'LEARNING' || w.category === 'JUST_ADDED') && w.word_type !== 'sentence'
@@ -45,7 +49,7 @@ function App() {
             <h1 className="text-2xl font-light text-zinc-100">Vocabulary</h1>
 
             <div className="flex items-center gap-3">
-              {totalReviewable > 0 && (
+              {!isReadOnly && totalReviewable > 0 && (
                 <button
                   onClick={() => setShowModeSelector(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg transition-colors"
@@ -55,20 +59,31 @@ function App() {
                 </button>
               )}
 
-              <button
-                onClick={() => setShowQuickAdd(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors"
-              >
-                <Plus size={18} />
-                Add Word
-              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={() => setShowQuickAdd(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors"
+                >
+                  <Plus size={18} />
+                  Add Word
+                </button>
+              )}
 
-              <button
-                onClick={signOut}
-                className="p-2 text-zinc-400 hover:text-zinc-100 transition-colors"
-              >
-                <LogOut size={20} />
-              </button>
+              {user ? (
+                <button
+                  onClick={signOut}
+                  className="p-2 text-zinc-400 hover:text-zinc-100 transition-colors"
+                >
+                  <LogOut size={20} />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowAuth(true)}
+                  className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors px-2 py-1"
+                >
+                  Log in
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -76,23 +91,25 @@ function App() {
 
       <main className="max-w-5xl mx-auto px-6 py-12">
         {wordsLoading ? (
-          <div className="text-center text-zinc-500">Loading your words...</div>
+          <div className="text-center text-zinc-500">Loading...</div>
         ) : words.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-zinc-500 mb-4">No words yet</p>
-            <button
-              onClick={() => setShowQuickAdd(true)}
-              className="text-zinc-400 hover:text-zinc-100 underline"
-            >
-              Add your first word
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={() => setShowQuickAdd(true)}
+                className="text-zinc-400 hover:text-zinc-100 underline"
+              >
+                Add your first word
+              </button>
+            )}
           </div>
         ) : (
-          <WordBank words={words} updateWord={updateWord} deleteWord={deleteWord} />
+          <WordBank words={words} updateWord={updateWord} deleteWord={deleteWord} practiceWord={practiceWord} isReadOnly={isReadOnly} />
         )}
       </main>
 
-      {showQuickAdd && <QuickAdd onClose={() => setShowQuickAdd(false)} />}
+      {showQuickAdd && <QuickAdd onClose={() => setShowQuickAdd(false)} addWord={addWord} checkDuplicate={checkDuplicate} />}
       {showModeSelector && (
         <ReviewModeSelector
           learnCount={learnWords.length}
@@ -108,8 +125,8 @@ function App() {
           onClose={() => setShowModeSelector(false)}
         />
       )}
-      {showLearn && <ReviewMode words={words} mode="learn" onClose={() => setShowLearn(false)} />}
-      {showRevise && <ReviewMode words={words} mode="revise" onClose={() => setShowRevise(false)} />}
+      {showLearn && <ReviewMode words={words} mode="learn" onClose={() => setShowLearn(false)} practiceWord={practiceWord} />}
+      {showRevise && <ReviewMode words={words} mode="revise" onClose={() => setShowRevise(false)} practiceWord={practiceWord} />}
     </div>
   );
 }

@@ -8,7 +8,10 @@ const corsHeaders = {
 
 interface RequestPayload {
   word: string;
-  definition: string;
+  definition?: string;
+  scaffoldOnly?: boolean;
+  defineOnly?: boolean;
+  shortPhraseOnly?: boolean;
 }
 
 interface EnrichmentResponse {
@@ -28,41 +31,128 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { word, definition }: RequestPayload = await req.json();
+    const { word, definition, scaffoldOnly, defineOnly, shortPhraseOnly }: RequestPayload = await req.json();
+
+    // Short phrase mode — just a brief 6-10 word descriptor, no examples or context
+    if (shortPhraseOnly) {
+      const shortPrompt = `Give a short, punchy description of the phrase "${word}" in 6-10 words. It should read like a dictionary gloss — no full sentences, no "it means", just a compact descriptor. Examples: "provisional belief accepted as true in order to proceed" or "quietly but firmly turned away or discouraged". Return ONLY a JSON object: {"definition": "your short description here"}`;
+      const shortResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "user", content: shortPrompt }],
+          max_tokens: 80,
+          temperature: 0.3,
+        }),
+      });
+      const shortData = await shortResponse.json();
+      const shortContent = shortData.choices?.[0]?.message?.content || "";
+      try {
+        const jsonMatch = shortContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return new Response(JSON.stringify({ definition: parsed.definition }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch { /* fall through */ }
+      return new Response(JSON.stringify({ error: "Could not generate short definition" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Quick define mode — short definition + examples + context for a word with no definition
+    if (defineOnly) {
+      const definePrompt = `For the word "${word}", provide a short definition and learning content.
+Return ONLY a JSON object:
+{
+  "definition": "Compact 5-10 word gloss, no full sentences. Like: concise and packed with meaning",
+  "examples": ["example 1", "example 2", "example 3"],
+  "context": "When and where to use this word. 2 sentences max.",
+  "scaffoldPrompt": "A short personal question (under 25 words) to help the learner use this word."
+}`;
+
+      const defineResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "user", content: definePrompt }],
+          max_tokens: 400,
+          temperature: 0.5,
+        }),
+      });
+
+      const defineData = await defineResponse.json();
+      const defineContent = defineData.choices?.[0]?.message?.content || "";
+      try {
+        const stripped = defineContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+        const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.definition) {
+            return new Response(JSON.stringify(parsed), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+      } catch (e) {
+        console.error("defineOnly parse error:", e, "content:", defineContent);
+      }
+      return new Response(JSON.stringify({ error: "Could not generate definition" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const scaffoldStyles = [
-      {
-        name: 'personal_memory',
-        instruction: `The scaffoldPrompt should invite personal reflection about a memory. Ask the learner to recall a specific moment, event, or experience from their life that connects to the word's meaning. Example for "ephemeral": "Think of a moment that felt fleeting but stayed with you - a sunset, a conversation, a feeling. Describe it using this word."`
-      },
-      {
-        name: 'person_you_know',
-        instruction: `The scaffoldPrompt should ask about someone the learner knows. Have them think of a friend, family member, colleague, or acquaintance who embodies or relates to the word. Example for "gregarious": "Think of the most social person you know - someone who lights up every room. Describe what makes them this way."`
-      },
-      {
-        name: 'pop_culture',
-        instruction: `The scaffoldPrompt should reference movies, TV shows, books, or music. Ask the learner to connect the word to a character, scene, or story they know. Example for "hubris": "Think of a movie character whose downfall came from excessive pride. Describe their fatal flaw."`
-      },
-      {
-        name: 'workplace_scenario',
-        instruction: `The scaffoldPrompt should describe a work or professional scenario. Ask the learner to imagine or recall a workplace situation. Example for "meticulous": "Describe a coworker or project that required extreme attention to detail. What made it so?"`
-      },
-      {
-        name: 'hypothetical_situation',
-        instruction: `The scaffoldPrompt should present a hypothetical "what if" scenario. Give the learner an imaginative situation to respond to. Example for "serendipitous": "Imagine you took a wrong turn and it led to something wonderful. Describe that lucky accident."`
-      },
-      {
-        name: 'sensory_description',
-        instruction: `The scaffoldPrompt should focus on senses and physical experience. Ask the learner to describe something they can see, hear, taste, smell, or feel. Example for "cacophonous": "Describe the loudest, most chaotic soundscape you've experienced - a busy street, a concert, a kitchen during rush hour."`
-      },
-      {
-        name: 'contrast_comparison',
-        instruction: `The scaffoldPrompt should ask for a comparison or contrast. Have the learner compare two things or describe an opposite. Example for "tranquil": "Compare your most peaceful place to its opposite. What makes one tranquil and the other chaotic?"`
-      }
+      `Ask about someone the learner knows. Example for "pithy": "Think of someone you know who always gets straight to the point. How would you describe the way they communicate?"`,
+      `Ask the learner to recall a specific memory. Example for "ephemeral": "Think of a moment that felt fleeting but stayed with you. How would you describe it?"`,
+      `Reference a movie, show, or book. Example for "hubris": "Think of a character whose pride led to their downfall. What happened?"`,
+      `Ask about a workplace or school moment. Example for "meticulous": "Think of a time extreme attention to detail really mattered. What was at stake?"`,
+      `Present a simple hypothetical. Example for "serendipitous": "Imagine a wrong turn led to something wonderful. What happened?"`,
+      `Ask about a feeling or sensory experience. Example for "cacophonous": "What's the loudest, most chaotic place you've ever been?"`,
     ];
 
-    const selectedStyle = scaffoldStyles[Math.floor(Math.random() * scaffoldStyles.length)];
-    const scaffoldInstructions = selectedStyle.instruction;
+    const scaffoldInstructions = scaffoldStyles[Math.floor(Math.random() * scaffoldStyles.length)];
+
+    if (scaffoldOnly) {
+      const scaffoldPrompt = `Generate a short scaffold prompt (1-2 sentences, under 25 words) to help a learner use the word "${word}" (meaning: "${definition}") in a sentence. It should be a simple personal question. No roleplay. Style: ${scaffoldInstructions}. Return ONLY a JSON object: {"scaffoldPrompt": "your prompt here"}`;
+
+      const scaffoldResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [
+            { role: "user", content: scaffoldPrompt },
+          ],
+          max_tokens: 100,
+          temperature: 0.7,
+        }),
+      });
+
+      const scaffoldData = await scaffoldResponse.json();
+      const scaffoldContent = scaffoldData.choices?.[0]?.message?.content || "";
+      try {
+        const jsonMatch = scaffoldContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return new Response(JSON.stringify(parsed), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch {
+        // Fall through to full enrichment
+      }
+    }
 
     const systemPrompt = `You are a vocabulary enrichment assistant. Given a word and its definition, generate helpful learning content.
 
@@ -77,7 +167,7 @@ Guidelines:
 - Provide exactly 3 diverse example sentences that clearly demonstrate the word's meaning
 - Examples should be natural, memorable, and show different contexts
 - Context should be 2 sentences max. First sentence starts with an action verb like "Use in..." explaining WHERE and WHY. Second sentence describes the setting or tone. Example: "Use in business, politics, or creative contexts to praise early recognition of trends or outcomes. Works well in formal writing and professional discussions."
-- ${scaffoldInstructions}
+- scaffoldPrompt MUST be 1-2 short sentences max (under 25 words). It should be a simple personal question that connects the word to the learner's life. No roleplay scenarios. No complex setups. Style: ${scaffoldInstructions}
 - Return ONLY the JSON object, no other text`;
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
