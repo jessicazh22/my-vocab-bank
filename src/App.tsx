@@ -5,7 +5,8 @@ import WordBank from './components/WordBank';
 import QuickAdd from './components/QuickAdd';
 import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
-import { Plus, Play, LogOut } from 'lucide-react';
+import { Plus, Play, LogOut, BookOpen } from 'lucide-react';
+import WeeklyChallenge from './components/WeeklyChallenge';
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -15,6 +16,7 @@ function App() {
   const [showLearn, setShowLearn] = useState(false);
   const [showRevise, setShowRevise] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showWeekly, setShowWeekly] = useState(false);
 
   if (authLoading) {
     return (
@@ -49,6 +51,16 @@ function App() {
             <h1 className="text-2xl font-light text-zinc-100">Vocabulary</h1>
 
             <div className="flex items-center gap-3">
+              {words.length > 0 && (
+                <button
+                  onClick={() => setShowWeekly(v => !v)}
+                  className="flex items-center gap-2 px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors text-sm"
+                >
+                  <BookOpen size={16} />
+                  This week
+                </button>
+              )}
+
               {!isReadOnly && totalReviewable > 0 && (
                 <button
                   onClick={() => setShowModeSelector(true)}
@@ -109,6 +121,7 @@ function App() {
         )}
       </main>
 
+      {showWeekly && <WeeklyChallenge words={words} onClose={() => setShowWeekly(false)} />}
       {showQuickAdd && <QuickAdd onClose={() => setShowQuickAdd(false)} addWord={addWord} checkDuplicate={checkDuplicate} />}
       {showModeSelector && (
         <ReviewModeSelector

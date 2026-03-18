@@ -1,12 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { VocabularyWord } from '../lib/supabase';
-import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, CheckCircle2, Circle, Zap, X } from 'lucide-react';
-
-interface WeeklyChallenge {
-  wordIds: string[];
-  completedIds: string[];
-  startedAt: string;
-}
+import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X } from 'lucide-react';
 import WordDetail from './WordDetail';
 import Confetti from './Confetti';
 
@@ -134,40 +128,6 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
 
   const [exitingWordId, setExitingWordId] = useState<string | null>(null);
 
-  // Weekly challenge state
-  const [weeklyChallenge, setWeeklyChallenge] = useState<WeeklyChallenge | null>(() => {
-    const saved = localStorage.getItem('weeklyChallenge');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [showChallengePicker, setShowChallengePicker] = useState(false);
-  const [pickerSelection, setPickerSelection] = useState<string[]>([]);
-
-  const saveChallenge = (challenge: WeeklyChallenge | null) => {
-    if (challenge) localStorage.setItem('weeklyChallenge', JSON.stringify(challenge));
-    else localStorage.removeItem('weeklyChallenge');
-    setWeeklyChallenge(challenge);
-  };
-
-  const toggleChallengeWord = (id: string) => {
-    if (!weeklyChallenge) return;
-    const completed = weeklyChallenge.completedIds.includes(id)
-      ? weeklyChallenge.completedIds.filter(c => c !== id)
-      : [...weeklyChallenge.completedIds, id];
-    saveChallenge({ ...weeklyChallenge, completedIds: completed });
-  };
-
-  const startChallenge = () => {
-    saveChallenge({ wordIds: pickerSelection, completedIds: [], startedAt: new Date().toISOString() });
-    setShowChallengePicker(false);
-    setPickerSelection([]);
-  };
-
-  const useMoreOftenWords = wordsAndPhrases.filter(w => w.category === 'LEARNING' && w.familiarity === 'NEED_TO_USE');
-  const challengeWords = weeklyChallenge
-    ? useMoreOftenWords.filter(w => weeklyChallenge.wordIds.includes(w.id))
-    : [];
-  const allDone = weeklyChallenge && challengeWords.length > 0 &&
-    weeklyChallenge.completedIds.length >= weeklyChallenge.wordIds.filter(id => useMoreOftenWords.some(w => w.id === id)).length;
 
   const handleConfettiComplete = useCallback(() => {
     setConfettiOrigin(null);
@@ -345,67 +305,6 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
               </div>
             )}
 
-            {/* This Week panel */}
-            {activeSection === 'words' && (
-              <div className="pt-4 border-t border-zinc-800">
-                {!weeklyChallenge ? (
-                  <button
-                    onClick={() => { setShowChallengePicker(true); setPickerSelection([]); }}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 transition-all"
-                  >
-                    <Zap size={13} />
-                    This week
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-[11px] text-zinc-500 font-medium flex items-center gap-1.5">
-                        <Zap size={11} />
-                        This week
-                      </span>
-                      <button
-                        onClick={() => saveChallenge(null)}
-                        className="text-zinc-700 hover:text-zinc-500 transition-colors"
-                        title="Clear challenge"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                    {allDone && (
-                      <div className="text-[11px] text-teal-400 px-1 pb-1">All done! 🎉</div>
-                    )}
-                    {challengeWords.length === 0 ? (
-                      <p className="text-[11px] text-zinc-600 px-1 italic">Words removed from Use More Often</p>
-                    ) : (
-                      challengeWords.map(w => {
-                        const done = weeklyChallenge.completedIds.includes(w.id);
-                        return (
-                          <button
-                            key={w.id}
-                            onClick={() => toggleChallengeWord(w.id)}
-                            className={`w-full flex items-start gap-2 px-2 py-1.5 rounded-lg text-left transition-all hover:bg-zinc-800/60 ${done ? 'opacity-50' : ''}`}
-                          >
-                            {done
-                              ? <CheckCircle2 size={13} className="text-teal-400 mt-0.5 flex-shrink-0" />
-                              : <Circle size={13} className="text-zinc-600 mt-0.5 flex-shrink-0" />
-                            }
-                            <span className={`text-xs leading-snug ${done ? 'line-through text-zinc-600' : 'text-zinc-300'}`}>
-                              {w.word}
-                            </span>
-                          </button>
-                        );
-                      })
-                    )}
-                    <button
-                      onClick={() => { setShowChallengePicker(true); setPickerSelection(weeklyChallenge.wordIds); }}
-                      className="w-full text-left px-2 py-1 text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors"
-                    >
-                      change words
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </nav>
         </aside>
 
@@ -485,70 +384,6 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
             <Trash2 size={14} />
             Delete
           </button>
-        </div>
-      )}
-
-      {/* Weekly challenge picker modal */}
-      {showChallengePicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-zinc-100 font-medium">This week</h2>
-              <button onClick={() => setShowChallengePicker(false)} className="text-zinc-600 hover:text-zinc-400">
-                <X size={16} />
-              </button>
-            </div>
-            <p className="text-zinc-500 text-xs mb-5">Pick up to 3 words to use in speech this week.</p>
-
-            {useMoreOftenWords.length === 0 ? (
-              <p className="text-zinc-600 text-sm italic py-4">No words in Use More Often yet.</p>
-            ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto">
-                {useMoreOftenWords.map(w => {
-                  const selected = pickerSelection.includes(w.id);
-                  const disabled = !selected && pickerSelection.length >= 3;
-                  return (
-                    <button
-                      key={w.id}
-                      disabled={disabled}
-                      onClick={() => setPickerSelection(prev =>
-                        prev.includes(w.id) ? prev.filter(id => id !== w.id) : [...prev, w.id]
-                      )}
-                      className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all border ${
-                        selected
-                          ? 'border-teal-500/50 bg-teal-500/10'
-                          : disabled
-                          ? 'border-zinc-800 opacity-40 cursor-not-allowed'
-                          : 'border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800/40'
-                      }`}
-                    >
-                      {selected
-                        ? <CheckCircle2 size={14} className="text-teal-400 mt-0.5 flex-shrink-0" />
-                        : <Circle size={14} className="text-zinc-600 mt-0.5 flex-shrink-0" />
-                      }
-                      <div className="min-w-0">
-                        <div className="text-sm text-zinc-200">{w.word}</div>
-                        {w.definition && (
-                          <div className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{w.definition}</div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between mt-5">
-              <span className="text-xs text-zinc-600">{pickerSelection.length} / 3 selected</span>
-              <button
-                disabled={pickerSelection.length === 0}
-                onClick={startChallenge}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
-              >
-                Start
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
