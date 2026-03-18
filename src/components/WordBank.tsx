@@ -438,7 +438,7 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
       {weeklyMode && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 shadow-2xl max-w-sm w-full mx-4">
           <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
-            Select words to focus on using in your speech this week. <span className="text-zinc-500">We recommend starting with 3.</span>
+            Choose your words for the week. <span className="text-zinc-500">The goal: slip them into real conversations.</span>
           </p>
           <div className="flex items-center justify-between">
             <span className="text-sm text-zinc-300">
