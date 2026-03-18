@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { VocabularyWord } from '../lib/supabase';
-import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X } from 'lucide-react';
+import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check } from 'lucide-react';
 import WordDetail from './WordDetail';
 import Confetti from './Confetti';
 
@@ -29,6 +29,29 @@ interface WordBankProps {
   deleteWord: (id: string) => Promise<void>;
   practiceWord: (id: string, userSentence: string) => Promise<void>;
   isReadOnly?: boolean;
+  weeklyMode?: boolean;
+  onWeeklyClose?: () => void;
+}
+
+const WEEKLY_KEY = 'weekly-challenge';
+function loadWeeklySelected(): string[] {
+  try {
+    const raw = localStorage.getItem(WEEKLY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const thisMonday = (() => {
+      const d = new Date(); const day = d.getDay();
+      d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); d.setHours(0,0,0,0);
+      return d.toISOString().split('T')[0];
+    })();
+    return parsed.weekStart === thisMonday ? (parsed.selected || []) : [];
+  } catch { return []; }
+}
+function saveWeeklySelected(selected: string[]) {
+  const d = new Date(); const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); d.setHours(0,0,0,0);
+  const weekStart = d.toISOString().split('T')[0];
+  localStorage.setItem(WEEKLY_KEY, JSON.stringify({ selected, weekStart }));
 }
 
 interface ContextMenuState {
@@ -50,7 +73,22 @@ function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> 
   return { category: 'KNOW_WELL' };
 }
 
-export default function WordBank({ words, updateWord, deleteWord, practiceWord, isReadOnly = false }: WordBankProps) {
+export default function WordBank({ words, updateWord, deleteWord, practiceWord, isReadOnly = false, weeklyMode = false, onWeeklyClose }: WordBankProps) {
+  const [weeklySelected, setWeeklySelected] = useState<string[]>(loadWeeklySelected);
+
+  const toggleWeeklySelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setWeeklySelected(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      saveWeeklySelected(next);
+      return next;
+    });
+  };
+
+  // When weeklyMode activates, jump to Use More Often section
+  useEffect(() => {
+    if (weeklyMode) setActiveNavSection('NEED_TO_USE');
+  }, [weeklyMode]);
   const [activeSection, setActiveSection] = useState<'words' | 'sentences'>('words');
   const [activeNavSection, setActiveNavSection] = useState<NavSection>('NEED_TO_LEARN');
   const [selectedWord, setSelectedWord] = useState<VocabularyWord | null>(null);
@@ -196,21 +234,38 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
     const isExiting = exitingWordId === word.id;
     const tagColor = word.source_tag ? getTagColor(word.source_tag) : null;
     const isNeedToUse = section === 'NEED_TO_USE';
+    const isWeeklySelected = weeklySelected.includes(word.id);
 
     return (
       <div
         key={word.id}
-        draggable={!isReadOnly}
-        onDragStart={!isReadOnly ? (e) => handleDragStart(e, word.id) : undefined}
-        onClick={() => setSelectedWord(word)}
-        onContextMenu={!isReadOnly ? (e) => handleContextMenu(e, word.id) : undefined}
-        className={`group relative bg-zinc-800/50 border rounded-lg p-4 transition-all ${
-          isReadOnly ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+        draggable={!isReadOnly && !weeklyMode}
+        onDragStart={!isReadOnly && !weeklyMode ? (e) => handleDragStart(e, word.id) : undefined}
+        onClick={weeklyMode ? (e) => toggleWeeklySelect(word.id, e) : () => setSelectedWord(word)}
+        onContextMenu={!isReadOnly && !weeklyMode ? (e) => handleContextMenu(e, word.id) : undefined}
+        className={`group relative bg-zinc-800/50 border rounded-lg p-4 transition-all cursor-pointer ${
+          weeklyMode
+            ? isWeeklySelected
+              ? 'border-amber-500/60 bg-amber-500/5 ring-1 ring-amber-500/30'
+              : 'border-zinc-700/50 hover:border-amber-500/30'
+            : isReadOnly
+              ? ''
+              : 'cursor-grab active:cursor-grabbing'
         } ${
-          isNeedToUse ? 'border-teal-900/30 hover:border-teal-800/50' : 'border-zinc-700/50 hover:border-zinc-600'
+          !weeklyMode && (isNeedToUse ? 'border-teal-900/30 hover:border-teal-800/50' : 'border-zinc-700/50 hover:border-zinc-600')
         } ${isCelebrating ? 'animate-celebrate' : ''} ${isExiting ? 'animate-card-exit' : 'animate-card-enter'}`}
       >
-        {!isReadOnly && (
+        {/* Weekly mode checkbox */}
+        {weeklyMode && (
+          <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+            isWeeklySelected ? 'bg-amber-500 border-amber-500' : 'border-zinc-600'
+          }`}>
+            {isWeeklySelected && <Check size={11} className="text-zinc-900" />}
+          </div>
+        )}
+
+        {/* Normal move button (hidden in weekly mode) */}
+        {!isReadOnly && !weeklyMode && (
           <button
             onClick={(e) => handleMoveToSection(e, word.id, isNeedToUse ? 'NEED_TO_LEARN' : 'NEED_TO_USE')}
             className={`absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all ${
@@ -403,6 +458,31 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
         originY={confettiOrigin?.y}
         onComplete={handleConfettiComplete}
       />
+
+      {/* Weekly mode floating bar */}
+      {weeklyMode && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-zinc-800 border border-zinc-700 rounded-full px-5 py-3 shadow-2xl">
+          <span className="text-sm text-zinc-400">
+            {weeklySelected.length === 0
+              ? 'Tap words to select'
+              : `${weeklySelected.length} word${weeklySelected.length === 1 ? '' : 's'} selected`}
+          </span>
+          {weeklySelected.length > 0 && (
+            <button
+              onClick={() => { saveWeeklySelected([]); setWeeklySelected([]); }}
+              className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            onClick={onWeeklyClose}
+            className="text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      )}
     </>
   );
 }

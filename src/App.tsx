@@ -5,8 +5,7 @@ import WordBank from './components/WordBank';
 import QuickAdd from './components/QuickAdd';
 import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
-import { Plus, Play, LogOut, BookOpen } from 'lucide-react';
-import WeeklyChallenge from './components/WeeklyChallenge';
+import { Plus, Play, LogOut, Zap } from 'lucide-react';
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -54,9 +53,13 @@ function App() {
               {words.length > 0 && (
                 <button
                   onClick={() => setShowWeekly(v => !v)}
-                  className="flex items-center gap-2 px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors text-sm"
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm ${
+                    showWeekly
+                      ? 'bg-amber-500/20 text-amber-400'
+                      : 'text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10'
+                  }`}
                 >
-                  <BookOpen size={16} />
+                  <Zap size={16} />
                   This week
                 </button>
               )}
@@ -117,11 +120,10 @@ function App() {
             )}
           </div>
         ) : (
-          <WordBank words={words} updateWord={updateWord} deleteWord={deleteWord} practiceWord={practiceWord} isReadOnly={isReadOnly} />
+          <WordBank words={words} updateWord={updateWord} deleteWord={deleteWord} practiceWord={practiceWord} isReadOnly={isReadOnly} weeklyMode={showWeekly} onWeeklyClose={() => setShowWeekly(false)} />
         )}
       </main>
 
-      {showWeekly && <WeeklyChallenge words={words} onClose={() => setShowWeekly(false)} />}
       {showQuickAdd && <QuickAdd onClose={() => setShowQuickAdd(false)} addWord={addWord} checkDuplicate={checkDuplicate} />}
       {showModeSelector && (
         <ReviewModeSelector
