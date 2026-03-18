@@ -346,7 +346,7 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
             )}
 
             {/* This Week panel */}
-            {!isReadOnly && activeSection === 'words' && (
+            {activeSection === 'words' && (
               <div className="pt-4 border-t border-zinc-800">
                 {!weeklyChallenge ? (
                   <button
