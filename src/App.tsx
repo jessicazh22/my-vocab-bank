@@ -5,7 +5,7 @@ import WordBank from './components/WordBank';
 import QuickAdd from './components/QuickAdd';
 import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
-import WeeklyReview, { WeeklyDoneEntry } from './components/WeeklyReview';
+import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
 import { Plus, Play, LogOut, Zap } from 'lucide-react';
 
 // --- Weekly state helpers ---
@@ -21,19 +21,27 @@ function getThisMonday() {
 
 interface WeeklyState {
   selected: string[];
-  done: WeeklyDoneEntry[];
+  wordLogs: { [wordId: string]: UsageLogEntry[] };
   weekStart: string;
 }
 
 function loadWeeklyState(): WeeklyState {
   try {
     const raw = localStorage.getItem(WEEKLY_KEY);
-    if (!raw) return { selected: [], done: [], weekStart: getThisMonday() };
-    const parsed: WeeklyState = JSON.parse(raw);
-    if (parsed.weekStart !== getThisMonday()) return { selected: [], done: [], weekStart: getThisMonday() };
-    return parsed;
+    if (!raw) return { selected: [], wordLogs: {}, weekStart: getThisMonday() };
+    const parsed = JSON.parse(raw);
+    if (parsed.weekStart !== getThisMonday()) return { selected: [], wordLogs: {}, weekStart: getThisMonday() };
+    // Backward compat: migrate old `done` array to `wordLogs`
+    if (parsed.done && !parsed.wordLogs) {
+      const wordLogs: { [id: string]: UsageLogEntry[] } = {};
+      (parsed.done as { id: string; sentence?: string }[]).forEach(d => {
+        wordLogs[d.id] = [{ timestamp: new Date().toISOString(), sentence: d.sentence }];
+      });
+      return { selected: parsed.selected || [], wordLogs, weekStart: parsed.weekStart };
+    }
+    return { selected: parsed.selected || [], wordLogs: parsed.wordLogs || {}, weekStart: parsed.weekStart };
   } catch {
-    return { selected: [], done: [], weekStart: getThisMonday() };
+    return { selected: [], wordLogs: {}, weekStart: getThisMonday() };
   }
 }
 
@@ -77,21 +85,17 @@ function App() {
     }));
   };
 
-  const handleToggleDone = (id: string) => {
+  const handleAddLog = (wordId: string, entry: UsageLogEntry) => {
     setWeeklyState(prev => {
-      const isDone = prev.done.some(d => d.id === id);
+      const prevLogs = prev.wordLogs ?? {};
       return {
         ...prev,
-        done: isDone ? prev.done.filter(d => d.id !== id) : [...prev.done, { id }],
+        wordLogs: {
+          ...prevLogs,
+          [wordId]: [...(prevLogs[wordId] || []), entry],
+        },
       };
     });
-  };
-
-  const handleSaveSentence = (id: string, sentence: string) => {
-    setWeeklyState(prev => ({
-      ...prev,
-      done: prev.done.map(d => d.id === id ? { ...d, sentence: sentence || undefined } : d),
-    }));
   };
 
   if (authLoading) {
@@ -118,6 +122,8 @@ function App() {
 
   const weeklySelectedWords = words.filter(w => weeklyState.selected.includes(w.id));
   const hasWeeklyWords = weeklyState.selected.length > 0;
+  // Guard: wordLogs may be absent on old localStorage state or HMR state preservation
+  const safeWordLogs = weeklyState.wordLogs ?? {};
 
   return (
     <div className="min-h-screen bg-zinc-900">
@@ -215,9 +221,8 @@ function App() {
       {weeklyView === 'review' && (
         <WeeklyReview
           selectedWords={weeklySelectedWords}
-          done={weeklyState.done}
-          onToggleDone={handleToggleDone}
-          onSaveSentence={handleSaveSentence}
+          wordLogs={safeWordLogs}
+          onAddLog={handleAddLog}
           onChangeWords={() => setWeeklyView('select')}
           onClose={() => setWeeklyView('off')}
         />

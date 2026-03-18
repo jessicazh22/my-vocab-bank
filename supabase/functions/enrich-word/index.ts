@@ -9,6 +9,8 @@ const corsHeaders = {
 interface RequestPayload {
   word: string;
   definition?: string;
+  sentence?: string;
+  mode?: string;
   scaffoldOnly?: boolean;
   defineOnly?: boolean;
   shortPhraseOnly?: boolean;
@@ -31,7 +33,36 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { word, definition, scaffoldOnly, defineOnly, shortPhraseOnly }: RequestPayload = await req.json();
+    const { word, definition, sentence, mode, scaffoldOnly, defineOnly, shortPhraseOnly }: RequestPayload = await req.json();
+
+    // Sentence check mode — verify a user's sentence uses the word correctly
+    if (mode === 'checkSentence') {
+      const checkPrompt = `The vocabulary word is "${word}"${definition ? ` (meaning: "${definition}")` : ''}. The learner wrote this sentence: "${sentence}". Does this sentence correctly demonstrate the word's meaning? Reply in 1 short, warm, encouraging sentence. If good, confirm it. If off, gently note why and suggest a tweak. Return ONLY: {"feedback": "your feedback here"}`;
+      const checkResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "user", content: checkPrompt }],
+          max_tokens: 100,
+          temperature: 0.4,
+        }),
+      });
+      const checkData = await checkResponse.json();
+      const checkContent = checkData.choices?.[0]?.message?.content || "";
+      try {
+        const jsonMatch = checkContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return new Response(JSON.stringify({ feedback: parsed.feedback }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch { /* fall through */ }
+      return new Response(JSON.stringify({ feedback: "Looks good!" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Short phrase mode — just a brief 6-10 word descriptor, no examples or context
     if (shortPhraseOnly) {
