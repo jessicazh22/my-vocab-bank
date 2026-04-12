@@ -98,7 +98,7 @@ Deno.serve(async (req: Request) => {
       const definePrompt = `For the word "${word}", provide a short definition and learning content.
 Return ONLY a JSON object:
 {
-  "definition": "Compact 5-10 word gloss, no full sentences. Like: concise and packed with meaning",
+  "definition": "Very short 3-8 word simple definition. Examples: 'concise and packed with meaning' or 'winding in curves or bends'. No full sentences, no 'means that'. Just a simple, direct phrase.",
   "examples": ["example 1", "example 2", "example 3"],
   "context": "When and where to use this word. 2 sentences max.",
   "scaffoldPrompt": "A short personal question (under 25 words) to help the learner use this word."
@@ -114,7 +114,7 @@ Return ONLY a JSON object:
           model: "llama-3.1-8b-instant",
           messages: [{ role: "user", content: definePrompt }],
           max_tokens: 400,
-          temperature: 0.5,
+          temperature: 0.3,
         }),
       });
 
