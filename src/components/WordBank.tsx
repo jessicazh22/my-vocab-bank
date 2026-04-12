@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { VocabularyWord } from '../lib/supabase';
-import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive } from 'lucide-react';
+import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive, ChevronDown } from 'lucide-react';
 import WordDetail from './WordDetail';
 import Confetti from './Confetti';
 
@@ -236,6 +236,11 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
     };
   }, [contextMenu.visible]);
 
+  const handleQuickArchive = async (e: React.MouseEvent, wordId: string) => {
+    e.stopPropagation();
+    await archiveWord(wordId);
+  };
+
   const renderWordCard = (word: VocabularyWord, section: NavSection = 'NEED_TO_LEARN') => {
     const isCelebrating = celebratingWordId === word.id;
     const isExiting = exitingWordId === word.id;
@@ -285,33 +290,31 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
           </div>
         )}
 
-        {/* Normal move button (hidden in weekly/bulk archive mode) */}
+        {/* Normal move button and quick archive (hidden in weekly/bulk archive mode) */}
         {!isReadOnly && !weeklyMode && !bulkArchiveMode && (
-          <button
-            onClick={(e) => handleMoveToSection(e, word.id, isNeedToUse ? 'NEED_TO_LEARN' : 'NEED_TO_USE')}
-            className={`absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all ${
-              isNeedToUse
-                ? 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'
-                : 'text-zinc-500 hover:text-teal-400 hover:bg-teal-500/10'
-            }`}
-            title={isNeedToUse ? 'Move back to Need to Learn' : 'Move to Use More Often'}
-          >
-            {isNeedToUse ? <RotateCcw size={14} /> : <BookOpen size={14} />}
-          </button>
+          <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+            <button
+              onClick={(e) => handleQuickArchive(e, word.id)}
+              className="p-1.5 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              title="Archive"
+            >
+              <Archive size={14} />
+            </button>
+            <button
+              onClick={(e) => handleMoveToSection(e, word.id, isNeedToUse ? 'NEED_TO_LEARN' : 'NEED_TO_USE')}
+              className={`p-1.5 rounded-md ${
+                isNeedToUse
+                  ? 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'
+                  : 'text-zinc-500 hover:text-teal-400 hover:bg-teal-500/10'
+              }`}
+              title={isNeedToUse ? 'Move back to Need to Learn' : 'Move to Use More Often'}
+            >
+              {isNeedToUse ? <RotateCcw size={14} /> : <BookOpen size={14} />}
+            </button>
+          </div>
         )}
 
-        {/* Quick archive button */}
-        {!isReadOnly && !weeklyMode && !bulkArchiveMode && (
-          <button
-            onClick={(e) => { e.stopPropagation(); handleArchive(); }}
-            className="absolute top-2 left-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
-            title="Archive word"
-          >
-            <Archive size={14} />
-          </button>
-        )}
-
-        <div className="flex-1 min-w-0 pr-6">
+        <div className="flex-1 min-w-0 pr-16">
           <div className="text-zinc-100 text-sm">{word.word}</div>
           <div className="text-zinc-500 text-xs leading-relaxed mt-1 line-clamp-1">
             {word.definition}
@@ -352,46 +355,18 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
       <div className="flex gap-8">
         <aside className="w-48 flex-shrink-0">
           <nav className="sticky top-24 space-y-6">
-            <div className="flex gap-1 text-[11px] text-zinc-600 mb-4 flex-wrap">
-              <button
-                onClick={() => setActiveSection('words')}
-                className={`px-2 py-1 rounded transition-colors ${
-                  activeSection === 'words' ? 'bg-zinc-800 text-zinc-400' : 'hover:text-zinc-500'
-                }`}
+            <div className="relative mb-4">
+              <select
+                value={activeSection}
+                onChange={(e) => setActiveSection(e.target.value as 'words' | 'phrases' | 'archive' | 'sentences')}
+                className="appearance-none bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-lg px-3 py-2 pr-8 w-full cursor-pointer hover:border-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
               >
-                words
-              </button>
-              <span className="py-1">/</span>
-              <button
-                onClick={() => setActiveSection('phrases')}
-                className={`px-2 py-1 rounded transition-colors ${
-                  activeSection === 'phrases' ? 'bg-zinc-800 text-zinc-400' : 'hover:text-zinc-500'
-                }`}
-              >
-                phrases
-              </button>
-              <span className="py-1">/</span>
-              <button
-                onClick={() => setActiveSection('sentences')}
-                className={`px-2 py-1 rounded transition-colors ${
-                  activeSection === 'sentences' ? 'bg-zinc-800 text-zinc-400' : 'hover:text-zinc-500'
-                }`}
-              >
-                sentences
-              </button>
-              {archived.length > 0 && (
-                <>
-                  <span className="py-1">/</span>
-                  <button
-                    onClick={() => setActiveSection('archive')}
-                    className={`px-2 py-1 rounded transition-colors ${
-                      activeSection === 'archive' ? 'bg-zinc-800 text-zinc-400' : 'hover:text-zinc-500'
-                    }`}
-                  >
-                    archive
-                  </button>
-                </>
-              )}
+                <option value="words">Words</option>
+                <option value="phrases">Phrases</option>
+                <option value="sentences">Sentences</option>
+                {archived.length > 0 && <option value="archive">Archive ({archived.length})</option>}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
             </div>
 
             {activeSection === 'words' && (
@@ -419,6 +394,19 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
         </aside>
 
         <main className="flex-1 min-w-0">
+          {/* Bulk archive button for non-archive sections */}
+          {activeSection !== 'archive' && !bulkArchiveMode && !weeklyMode && (
+            <div className="flex justify-end mb-3">
+              <button
+                onClick={() => setBulkArchiveMode(true)}
+                className="text-xs text-zinc-600 hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-red-500/5 flex items-center gap-1.5"
+              >
+                <Archive size={12} />
+                Bulk archive
+              </button>
+            </div>
+          )}
+
           {activeSection === 'words' ? (
             <>
               {activeWords.length === 0 ? (
@@ -431,27 +419,10 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
             </>
           ) : activeSection === 'phrases' ? (
             <>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  {phrases.length === 0 ? (
-                    <p className="text-zinc-600 text-sm italic">No phrases yet. Move phrases from the words section here.</p>
-                  ) : (
-                    <p className="text-zinc-500 text-xs mb-4">
-                      These phrases are for reference only. No practice mode.
-                    </p>
-                  )}
-                </div>
-                {phrases.length > 0 && !bulkArchiveMode && (
-                  <button
-                    onClick={() => setBulkArchiveMode(true)}
-                    className="text-xs text-zinc-500 hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-red-500/5"
-                  >
-                    Bulk archive
-                  </button>
-                )}
-              </div>
-              {phrases.length > 0 && (
-                <div className="space-y-3">
+              {phrases.length === 0 ? (
+                <div className="text-zinc-600 text-sm italic py-8">No phrases yet</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {phrases.map((phrase) => renderWordCard(phrase))}
                 </div>
               )}
@@ -512,14 +483,41 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                 <div className="space-y-3">
                   {sentences.map((sentence) => {
                     const tagColor = sentence.source_tag ? getTagColor(sentence.source_tag) : null;
+                    const isBulkSelected = bulkArchiveSelected.has(sentence.id);
                     return (
                       <div
                         key={sentence.id}
-                        onClick={() => setSelectedWord(sentence)}
-                        onContextMenu={(e) => handleContextMenu(e, sentence.id)}
-                        className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors cursor-pointer"
+                        onClick={bulkArchiveMode ? () => toggleBulkArchiveSelect(sentence.id) : () => setSelectedWord(sentence)}
+                        onContextMenu={!bulkArchiveMode ? (e) => handleContextMenu(e, sentence.id) : undefined}
+                        className={`group relative bg-zinc-800/50 border rounded-lg p-4 transition-colors cursor-pointer ${
+                          bulkArchiveMode
+                            ? isBulkSelected
+                              ? 'border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30'
+                              : 'border-zinc-700/50 hover:border-red-500/30'
+                            : 'border-zinc-700/50 hover:border-zinc-600'
+                        }`}
                       >
-                        <div className="flex-1 min-w-0">
+                        {/* Bulk archive mode checkbox */}
+                        {bulkArchiveMode && (
+                          <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                            isBulkSelected ? 'bg-red-500 border-red-500' : 'border-zinc-600'
+                          }`}>
+                            {isBulkSelected && <Check size={11} className="text-zinc-900" />}
+                          </div>
+                        )}
+                        
+                        {/* Quick archive button */}
+                        {!bulkArchiveMode && (
+                          <button
+                            onClick={(e) => handleQuickArchive(e, sentence.id)}
+                            className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            title="Archive"
+                          >
+                            <Archive size={14} />
+                          </button>
+                        )}
+                        
+                        <div className="flex-1 min-w-0 pr-8">
                           <div className="text-zinc-200 text-sm leading-relaxed">{sentence.word}</div>
                           {sentence.definition && (
                             <div className="text-zinc-500 text-xs leading-relaxed mt-2">
@@ -597,14 +595,14 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
       />
 
       {/* Bulk archive floating bar */}
-      {bulkArchiveMode && activeSection === 'phrases' && (
+      {bulkArchiveMode && activeSection !== 'archive' && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 shadow-2xl max-w-sm w-full mx-4">
           <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
-            Select phrases to archive. <span className="text-zinc-500">They&apos;ll move to the archive.</span>
+            Select items to archive. <span className="text-zinc-500">They&apos;ll move to the archive.</span>
           </p>
           <div className="flex items-center justify-between">
             <span className="text-sm text-zinc-300">
-              {bulkArchiveSelected.size === 0 ? 'None selected' : `${bulkArchiveSelected.size} phrase${bulkArchiveSelected.size === 1 ? '' : 's'} selected`}
+              {bulkArchiveSelected.size === 0 ? 'None selected' : `${bulkArchiveSelected.size} item${bulkArchiveSelected.size === 1 ? '' : 's'} selected`}
             </span>
             <div className="flex items-center gap-3">
               <button
