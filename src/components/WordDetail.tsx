@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, BookMarked, GraduationCap, Loader2, RefreshCw, Undo2, Check, Send, Sparkles, MessageCircle, RotateCcw, Globe, Lock } from 'lucide-react';
+import { X, BookMarked, GraduationCap, Loader2, RefreshCw, Undo2, Check, Send, Sparkles, MessageCircle, RotateCcw, Globe, Lock, Tag } from 'lucide-react';
 import { VocabularyWord, ChatMessage } from '../lib/supabase';
 import { useWordChat } from '../lib/hooks';
 
@@ -606,6 +606,33 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
               <p className="text-zinc-300 leading-relaxed">{localWord.definition}</p>
             )}
           </div>
+
+          {!isReadOnly && (
+            <div className="border-t border-zinc-800 pt-6">
+              <div className="text-xs text-zinc-500 uppercase tracking-wide mb-3">Type</div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    const newType = localWord.word_type === 'phrase' ? 'word' : 'phrase';
+                    await updateWord(word.id, { word_type: newType });
+                    setLocalWord(prev => ({ ...prev, word_type: newType }));
+                    onWordUpdate?.();
+                  }}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
+                    localWord.word_type === 'phrase'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/50'
+                      : 'bg-zinc-800/50 text-zinc-400 border border-zinc-700/50 hover:border-blue-500/50 hover:text-blue-300'
+                  }`}
+                >
+                  <Tag size={14} />
+                  {localWord.word_type === 'phrase' ? 'Phrase' : 'Word'}
+                </button>
+                <span className="text-xs text-zinc-600">
+                  {localWord.word_type === 'phrase' ? 'In Phrases section' : 'In word categories'}
+                </span>
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">
