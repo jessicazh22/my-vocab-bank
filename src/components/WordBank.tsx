@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { VocabularyWord } from '../lib/supabase';
-import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check } from 'lucide-react';
+import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive } from 'lucide-react';
 import WordDetail from './WordDetail';
 import Confetti from './Confetti';
 
@@ -27,6 +27,7 @@ interface WordBankProps {
   words: VocabularyWord[];
   updateWord: (id: string, updates: Partial<VocabularyWord>) => Promise<void>;
   deleteWord: (id: string) => Promise<void>;
+  archiveWord: (id: string) => Promise<void>;
   practiceWord: (id: string, userSentence: string) => Promise<void>;
   isReadOnly?: boolean;
   weeklyMode?: boolean;
@@ -54,7 +55,7 @@ function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> 
   return { category: 'KNOW_WELL' };
 }
 
-export default function WordBank({ words, updateWord, deleteWord, practiceWord, isReadOnly = false, weeklyMode = false, weeklySelected = [], onToggleWeeklySelect, onWeeklyClose }: WordBankProps) {
+export default function WordBank({ words, updateWord, deleteWord, archiveWord, practiceWord, isReadOnly = false, weeklyMode = false, weeklySelected = [], onToggleWeeklySelect, onWeeklyClose }: WordBankProps) {
   const toggleWeeklySelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleWeeklySelect?.(id);
@@ -64,10 +65,12 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
   useEffect(() => {
     if (weeklyMode) setActiveNavSection('NEED_TO_USE');
   }, [weeklyMode]);
-  const [activeSection, setActiveSection] = useState<'words' | 'sentences'>('words');
+  const [activeSection, setActiveSection] = useState<'words' | 'phrases' | 'archive' | 'sentences'>('words');
   const [activeNavSection, setActiveNavSection] = useState<NavSection>('NEED_TO_LEARN');
   const [selectedWord, setSelectedWord] = useState<VocabularyWord | null>(null);
   const [dragOverSection, setDragOverSection] = useState<NavSection | null>(null);
+  const [bulkArchiveMode, setBulkArchiveMode] = useState(false);
+  const [bulkArchiveSelected, setBulkArchiveSelected] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
     x: 0,
@@ -91,8 +94,10 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
     }
   }, [words, selectedWord?.id]);
 
-  const wordsAndPhrases = words.filter((w) => w.word_type !== 'sentence');
-  const sentences = words.filter((w) => w.word_type === 'sentence');
+  const wordsAndPhrases = words.filter((w) => w.word_type !== 'sentence' && !w.is_archived);
+  const phrases = words.filter((w) => w.word_type === 'phrase' && !w.is_archived);
+  const archived = words.filter((w) => w.is_archived);
+  const sentences = words.filter((w) => w.word_type === 'sentence' && !w.is_archived);
 
   const getWordsForSection = (section: NavSection) => {
     if (section === 'NEED_TO_LEARN') return wordsAndPhrases.filter(w => w.category === 'LEARNING' && w.familiarity === 'NEED_TO_LEARN');
@@ -137,6 +142,33 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
       await deleteWord(contextMenu.wordId);
       setContextMenu({ visible: false, x: 0, y: 0, wordId: null });
     }
+  };
+
+  const handleArchive = async () => {
+    if (contextMenu.wordId) {
+      await archiveWord(contextMenu.wordId);
+      setContextMenu({ visible: false, x: 0, y: 0, wordId: null });
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    for (const id of bulkArchiveSelected) {
+      await archiveWord(id);
+    }
+    setBulkArchiveSelected(new Set());
+    setBulkArchiveMode(false);
+  };
+
+  const toggleBulkArchiveSelect = (id: string) => {
+    setBulkArchiveSelected(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
   };
 
   const [exitingWordId, setExitingWordId] = useState<string | null>(null);
@@ -210,24 +242,29 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
     const tagColor = word.source_tag ? getTagColor(word.source_tag) : null;
     const isNeedToUse = section === 'NEED_TO_USE';
     const isWeeklySelected = weeklySelected.includes(word.id);
+    const isBulkSelected = bulkArchiveSelected.has(word.id);
 
     return (
       <div
         key={word.id}
-        draggable={!isReadOnly && !weeklyMode}
-        onDragStart={!isReadOnly && !weeklyMode ? (e) => handleDragStart(e, word.id) : undefined}
-        onClick={weeklyMode ? (e) => toggleWeeklySelect(word.id, e) : () => setSelectedWord(word)}
-        onContextMenu={!isReadOnly && !weeklyMode ? (e) => handleContextMenu(e, word.id) : undefined}
+        draggable={!isReadOnly && !weeklyMode && !bulkArchiveMode}
+        onDragStart={!isReadOnly && !weeklyMode && !bulkArchiveMode ? (e) => handleDragStart(e, word.id) : undefined}
+        onClick={weeklyMode ? (e) => toggleWeeklySelect(word.id, e) : bulkArchiveMode ? () => toggleBulkArchiveSelect(word.id) : () => setSelectedWord(word)}
+        onContextMenu={!isReadOnly && !weeklyMode && !bulkArchiveMode ? (e) => handleContextMenu(e, word.id) : undefined}
         className={`group relative bg-zinc-800/50 border rounded-lg p-4 transition-all cursor-pointer ${
           weeklyMode
             ? isWeeklySelected
               ? 'border-amber-500/60 bg-amber-500/5 ring-1 ring-amber-500/30'
               : 'border-zinc-700/50 hover:border-amber-500/30'
-            : isReadOnly
-              ? ''
-              : 'cursor-grab active:cursor-grabbing'
+            : bulkArchiveMode
+              ? isBulkSelected
+                ? 'border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30'
+                : 'border-zinc-700/50 hover:border-red-500/30'
+              : isReadOnly
+                ? ''
+                : 'cursor-grab active:cursor-grabbing'
         } ${
-          !weeklyMode && (isNeedToUse ? 'border-teal-900/30 hover:border-teal-800/50' : 'border-zinc-700/50 hover:border-zinc-600')
+          !weeklyMode && !bulkArchiveMode && (isNeedToUse ? 'border-teal-900/30 hover:border-teal-800/50' : 'border-zinc-700/50 hover:border-zinc-600')
         } ${isCelebrating ? 'animate-celebrate' : ''} ${isExiting ? 'animate-card-exit' : 'animate-card-enter'}`}
       >
         {/* Weekly mode checkbox */}
@@ -239,8 +276,17 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
           </div>
         )}
 
-        {/* Normal move button (hidden in weekly mode) */}
-        {!isReadOnly && !weeklyMode && (
+        {/* Bulk archive mode checkbox */}
+        {bulkArchiveMode && (
+          <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+            isBulkSelected ? 'bg-red-500 border-red-500' : 'border-zinc-600'
+          }`}>
+            {isBulkSelected && <Check size={11} className="text-zinc-900" />}
+          </div>
+        )}
+
+        {/* Normal move button (hidden in weekly/bulk archive mode) */}
+        {!isReadOnly && !weeklyMode && !bulkArchiveMode && (
           <button
             onClick={(e) => handleMoveToSection(e, word.id, isNeedToUse ? 'NEED_TO_LEARN' : 'NEED_TO_USE')}
             className={`absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all ${
@@ -253,6 +299,18 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
             {isNeedToUse ? <RotateCcw size={14} /> : <BookOpen size={14} />}
           </button>
         )}
+
+        {/* Quick archive button */}
+        {!isReadOnly && !weeklyMode && !bulkArchiveMode && (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleArchive(); }}
+            className="absolute top-2 left-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+            title="Archive word"
+          >
+            <Archive size={14} />
+          </button>
+        )}
+
         <div className="flex-1 min-w-0 pr-6">
           <div className="text-zinc-100 text-sm">{word.word}</div>
           <div className="text-zinc-500 text-xs leading-relaxed mt-1 line-clamp-1">
@@ -294,7 +352,7 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
       <div className="flex gap-8">
         <aside className="w-48 flex-shrink-0">
           <nav className="sticky top-24 space-y-6">
-            <div className="flex gap-1 text-[11px] text-zinc-600 mb-4">
+            <div className="flex gap-1 text-[11px] text-zinc-600 mb-4 flex-wrap">
               <button
                 onClick={() => setActiveSection('words')}
                 className={`px-2 py-1 rounded transition-colors ${
@@ -305,6 +363,15 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
               </button>
               <span className="py-1">/</span>
               <button
+                onClick={() => setActiveSection('phrases')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  activeSection === 'phrases' ? 'bg-zinc-800 text-zinc-400' : 'hover:text-zinc-500'
+                }`}
+              >
+                phrases
+              </button>
+              <span className="py-1">/</span>
+              <button
                 onClick={() => setActiveSection('sentences')}
                 className={`px-2 py-1 rounded transition-colors ${
                   activeSection === 'sentences' ? 'bg-zinc-800 text-zinc-400' : 'hover:text-zinc-500'
@@ -312,6 +379,19 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
               >
                 sentences
               </button>
+              {archived.length > 0 && (
+                <>
+                  <span className="py-1">/</span>
+                  <button
+                    onClick={() => setActiveSection('archive')}
+                    className={`px-2 py-1 rounded transition-colors ${
+                      activeSection === 'archive' ? 'bg-zinc-800 text-zinc-400' : 'hover:text-zinc-500'
+                    }`}
+                  >
+                    archive
+                  </button>
+                </>
+              )}
             </div>
 
             {activeSection === 'words' && (
@@ -346,6 +426,81 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {activeWords.map((word) => renderWordCard(word, activeNavSection))}
+                </div>
+              )}
+            </>
+          ) : activeSection === 'phrases' ? (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  {phrases.length === 0 ? (
+                    <p className="text-zinc-600 text-sm italic">No phrases yet. Move phrases from the words section here.</p>
+                  ) : (
+                    <p className="text-zinc-500 text-xs mb-4">
+                      These phrases are for reference only. No practice mode.
+                    </p>
+                  )}
+                </div>
+                {phrases.length > 0 && !bulkArchiveMode && (
+                  <button
+                    onClick={() => setBulkArchiveMode(true)}
+                    className="text-xs text-zinc-500 hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-red-500/5"
+                  >
+                    Bulk archive
+                  </button>
+                )}
+              </div>
+              {phrases.length > 0 && (
+                <div className="space-y-3">
+                  {phrases.map((phrase) => renderWordCard(phrase))}
+                </div>
+              )}
+            </>
+          ) : activeSection === 'archive' ? (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-zinc-500 text-xs">Archived items can be restored by editing them.</p>
+                {bulkArchiveMode && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setBulkArchiveMode(false); setBulkArchiveSelected(new Set()); }}
+                      className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors px-2 py-1 rounded"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+              {archived.length === 0 ? (
+                <div className="text-zinc-600 text-sm italic py-8">No archived items yet</div>
+              ) : (
+                <div className="space-y-3">
+                  {archived.map((word) => {
+                    const tagColor = word.source_tag ? getTagColor(word.source_tag) : null;
+                    return (
+                      <div
+                        key={word.id}
+                        onClick={() => setSelectedWord(word)}
+                        className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors cursor-pointer opacity-75 hover:opacity-100"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-zinc-400 text-sm">{word.word}</div>
+                          <div className="text-zinc-600 text-xs leading-relaxed mt-1 line-clamp-1">
+                            {word.definition}
+                          </div>
+                          {word.source_tag && tagColor && (
+                            <button
+                              onClick={(e) => toggleFavoriteSource(e, word.source_tag!)}
+                              className={`group/tag inline-flex items-center gap-1 mt-2 px-1.5 py-0.5 rounded text-[10px] transition-all ${tagColor.bg} ${tagColor.text} border ${tagColor.border}`}
+                            >
+                              <BookMarked size={9} />
+                              {word.source_tag}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -408,6 +563,13 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
           className="fixed z-50 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl py-1 min-w-[140px]"
         >
           <button
+            onClick={handleArchive}
+            className="w-full px-3 py-2 text-left text-sm text-orange-400 hover:bg-zinc-800 flex items-center gap-2 transition-colors"
+          >
+            <Archive size={14} />
+            Archive
+          </button>
+          <button
             onClick={handleDelete}
             className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-800 flex items-center gap-2 transition-colors"
           >
@@ -433,6 +595,36 @@ export default function WordBank({ words, updateWord, deleteWord, practiceWord, 
         originY={confettiOrigin?.y}
         onComplete={handleConfettiComplete}
       />
+
+      {/* Bulk archive floating bar */}
+      {bulkArchiveMode && activeSection === 'phrases' && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 shadow-2xl max-w-sm w-full mx-4">
+          <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
+            Select phrases to archive. <span className="text-zinc-500">They&apos;ll move to the archive.</span>
+          </p>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-300">
+              {bulkArchiveSelected.size === 0 ? 'None selected' : `${bulkArchiveSelected.size} phrase${bulkArchiveSelected.size === 1 ? '' : 's'} selected`}
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setBulkArchiveMode(false); setBulkArchiveSelected(new Set()); }}
+                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+              >
+                Cancel
+              </button>
+              {bulkArchiveSelected.size > 0 && (
+                <button
+                  onClick={handleBulkArchive}
+                  className="text-sm font-medium text-red-400 hover:text-red-300 transition-colors"
+                >
+                  Archive
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Weekly mode floating bar */}
       {weeklyMode && (
