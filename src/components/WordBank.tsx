@@ -477,7 +477,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                   activeSection === 'archive' ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-500'
                 }`}
               >
-                archive ({archived.length})
+                archive
               </button>
             )}
 
