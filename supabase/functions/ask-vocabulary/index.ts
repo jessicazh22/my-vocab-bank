@@ -18,8 +18,6 @@ interface RequestPayload {
   history?: ChatMessage[];
 }
 
-const GROQ_API_KEY = "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";
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -41,6 +39,9 @@ Answer their questions concisely and helpfully. Keep responses brief (2-4 senten
       { role: "user", content: question },
     ];
 
+    // Use Groq API with fallback key
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "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";
+
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -58,6 +59,7 @@ Answer their questions concisely and helpfully. Keep responses brief (2-4 senten
     const data = await response.json();
 
     if (!response.ok) {
+      console.error('[ask-vocabulary] API error:', { status: response.status, data });
       return new Response(
         JSON.stringify({ error: "AI request failed", details: data }),
         {
@@ -76,6 +78,7 @@ Answer their questions concisely and helpfully. Keep responses brief (2-4 senten
       }
     );
   } catch (error) {
+    console.error('[ask-vocabulary] Exception:', error);
     return new Response(
       JSON.stringify({ error: "Failed to process request", details: String(error) }),
       {

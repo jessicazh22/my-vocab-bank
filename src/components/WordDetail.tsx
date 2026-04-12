@@ -201,6 +201,9 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
       if (data.answer) {
         const updatedHistory: ChatMessage[] = [...newHistory, { role: 'assistant', content: data.answer }];
         await saveChat(updatedHistory);
+      } else if (data.error) {
+        const errorHistory: ChatMessage[] = [...newHistory, { role: 'assistant', content: `Error: ${data.error}` }];
+        await saveChat(errorHistory);
       }
     } catch {
       const errorHistory: ChatMessage[] = [...newHistory, { role: 'assistant', content: 'Unable to get a response. Try again later.' }];
