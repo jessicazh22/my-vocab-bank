@@ -184,14 +184,10 @@ export function useVocabulary() {
     savingRef.current.add(id);
 
     const cleanUpdates = sanitizeUpdates(updates);
-    console.log('[v0] updateWord - cleanUpdates:', cleanUpdates);
-    const { error, data } = await supabase
+    const { error } = await supabase
       .from('vocabulary')
       .update({ ...cleanUpdates, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select();
-    
-    console.log('[v0] updateWord - supabase response:', { error, data });
+      .eq('id', id);
 
     // Clear saving flag after a short delay to let real-time catch up
     setTimeout(() => {
@@ -210,9 +206,7 @@ export function useVocabulary() {
   };
 
   const archiveWord = async (id: string) => {
-    console.log('[v0] archiveWord called with id:', id);
     await updateWord(id, { is_archived: true });
-    console.log('[v0] archiveWord completed for id:', id);
   };
 
   const practiceWord = async (id: string, userSentence: string) => {

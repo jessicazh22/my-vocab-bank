@@ -184,8 +184,6 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     setAiLoading(true);
     try {
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-vocabulary`;
-      console.log('[v0] handleAskAI - calling:', apiUrl);
-      console.log('[v0] handleAskAI - VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL);
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -199,9 +197,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
           history: chatHistory,
         }),
       });
-      console.log('[v0] handleAskAI - response status:', response.status);
       const data = await response.json();
-      console.log('[v0] handleAskAI - data:', data);
       if (data.answer) {
         const updatedHistory: ChatMessage[] = [...newHistory, { role: 'assistant', content: data.answer }];
         await saveChat(updatedHistory);
@@ -209,8 +205,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
         const errorHistory: ChatMessage[] = [...newHistory, { role: 'assistant', content: `Error: ${data.error}` }];
         await saveChat(errorHistory);
       }
-    } catch (err) {
-      console.error('[v0] handleAskAI - error:', err);
+    } catch {
       const errorHistory: ChatMessage[] = [...newHistory, { role: 'assistant', content: 'Unable to get a response. Try again later.' }];
       await saveChat(errorHistory);
     } finally {
