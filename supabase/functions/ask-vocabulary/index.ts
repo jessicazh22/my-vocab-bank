@@ -18,11 +18,20 @@ interface RequestPayload {
   history?: ChatMessage[];
 }
 
+const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
       headers: corsHeaders,
+    });
+  }
+
+  if (!GROQ_API_KEY) {
+    return new Response(JSON.stringify({ error: "GROQ_API_KEY not configured" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
@@ -38,9 +47,6 @@ Answer their questions concisely and helpfully. Keep responses brief (2-4 senten
       ...history.map(msg => ({ role: msg.role, content: msg.content })),
       { role: "user", content: question },
     ];
-
-    // Use Groq API with fallback key
-    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "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";
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -59,7 +65,6 @@ Answer their questions concisely and helpfully. Keep responses brief (2-4 senten
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('[ask-vocabulary] API error:', { status: response.status, data });
       return new Response(
         JSON.stringify({ error: "AI request failed", details: data }),
         {
@@ -78,7 +83,6 @@ Answer their questions concisely and helpfully. Keep responses brief (2-4 senten
       }
     );
   } catch (error) {
-    console.error('[ask-vocabulary] Exception:', error);
     return new Response(
       JSON.stringify({ error: "Failed to process request", details: String(error) }),
       {
