@@ -335,6 +335,11 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                 phrase
               </span>
             )}
+            {word.is_conversational && (
+              <span className="text-[10px] text-blue-400 bg-blue-500/20 px-1.5 py-0.5 rounded border border-blue-500/50">
+                💬 conversational
+              </span>
+            )}
             {word.source_tag && tagColor && (
               <button
                 onClick={(e) => toggleFavoriteSource(e, word.source_tag!)}

@@ -728,6 +728,25 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
             </div>
           )}
 
+          {!isReadOnly && (
+            <div className="pt-4 border-t border-zinc-800">
+              <button
+                onClick={async () => {
+                  const next = !localWord.is_conversational;
+                  setLocalWord(prev => ({ ...prev, is_conversational: next }));
+                  await updateWord(word.id, { is_conversational: next });
+                }}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  localWord.is_conversational
+                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/50'
+                    : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50 hover:border-blue-500/50 hover:text-blue-300'
+                }`}
+              >
+                💬 Conversational
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between text-xs text-zinc-600 pt-4 border-t border-zinc-800">
             <span>Practiced {localWord.practice_count} times</span>
             <div className="flex items-center gap-3">

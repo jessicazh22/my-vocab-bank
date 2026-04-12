@@ -147,50 +147,58 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
   const doAddWord = async (word: string, definition?: string) => {
     setIsAdding(true);
 
-    let finalDefinition = definition || '';
-    let aiExamples: string[] | undefined;
-    let aiContext: string | undefined;
-    let aiScaffold: string | undefined;
+    try {
+      let finalDefinition = definition || '';
+      let aiExamples: string[] | undefined;
+      let aiContext: string | undefined;
+      let aiScaffold: string | undefined;
 
-    // No user-provided definition — auto-generate short definition + examples + context
-    if (!definition) {
-      setAddingStatus('Finding definition...');
-      const isPhrase = word.includes(' ');
-      const enriched = await enrichWord(word, isPhrase);
-      finalDefinition = enriched.definition || '';
-      aiExamples = enriched.examples;
-      aiContext = enriched.context;
-      aiScaffold = enriched.scaffoldPrompt;
+      // No user-provided definition — auto-generate short definition + examples + context
+      if (!definition) {
+        setAddingStatus('Finding definition...');
+        const isPhrase = word.includes(' ');
+        const enriched = await enrichWord(word, isPhrase);
+        finalDefinition = enriched.definition || '';
+        aiExamples = enriched.examples;
+        aiContext = enriched.context;
+        aiScaffold = enriched.scaffoldPrompt;
+      }
+
+      setAddingStatus('Adding...');
+      const userExample = exampleSentence ? `[yours] ${exampleSentence}` : undefined;
+      // Merge user example + AI examples
+      const finalExample = userExample
+        ? aiExamples?.length
+          ? `${userExample} / ${aiExamples.slice(0, 2).join(' / ')}`
+          : userExample
+        : aiExamples?.slice(0, 3).join(' / ');
+
+      // Explicitly cap word_type at 'phrase' — never let length-based heuristics mark it as 'sentence'
+      const wordType = word.includes(' ') ? 'phrase' : 'word';
+
+      await addWord(word, finalDefinition, {
+        exampleSentence: finalExample,
+        context: aiContext,
+        scaffoldPrompt: aiScaffold,
+        sourceTag: sourceTag || undefined,
+        wordType,
+      });
+
+      setIsAdding(false);
+      setAddingStatus('');
+      flashSuccess(() => {
+        setInput('');
+        setExampleSentence('');
+        setSourceTag('');
+        setShowMore(false);
+      });
+    } catch (err) {
+      setIsAdding(false);
+      setAddingStatus('');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add word';
+      // Show error message to user
+      alert(errorMessage);
     }
-
-    setAddingStatus('Adding...');
-    const userExample = exampleSentence ? `[yours] ${exampleSentence}` : undefined;
-    // Merge user example + AI examples
-    const finalExample = userExample
-      ? aiExamples?.length
-        ? `${userExample} / ${aiExamples.slice(0, 2).join(' / ')}`
-        : userExample
-      : aiExamples?.slice(0, 3).join(' / ');
-
-    // Explicitly cap word_type at 'phrase' — never let length-based heuristics mark it as 'sentence'
-    const wordType = word.includes(' ') ? 'phrase' : 'word';
-
-    await addWord(word, finalDefinition, {
-      exampleSentence: finalExample,
-      context: aiContext,
-      scaffoldPrompt: aiScaffold,
-      sourceTag: sourceTag || undefined,
-      wordType,
-    });
-
-    setIsAdding(false);
-    setAddingStatus('');
-    flashSuccess(() => {
-      setInput('');
-      setExampleSentence('');
-      setSourceTag('');
-      setShowMore(false);
-    });
   };
 
   // --- Sentence submit ---
@@ -203,16 +211,23 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
     setIsAdding(true);
     setAddingStatus('Adding sentence...');
 
-    await addWord(parsed.sentence, '', {
-      sourceTag: parsed.sourceTag,
-      wordType: 'sentence',
-    });
+    try {
+      await addWord(parsed.sentence, '', {
+        sourceTag: parsed.sourceTag,
+        wordType: 'sentence',
+      });
 
-    setIsAdding(false);
-    setAddingStatus('');
-    flashSuccess(() => {
-      setSentenceInput('');
-    });
+      setIsAdding(false);
+      setAddingStatus('');
+      flashSuccess(() => {
+        setSentenceInput('');
+      });
+    } catch (err) {
+      setIsAdding(false);
+      setAddingStatus('');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add sentence';
+      alert(errorMessage);
+    }
   };
 
   const handleAddAnyway = async () => {
