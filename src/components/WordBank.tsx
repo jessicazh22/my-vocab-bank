@@ -94,7 +94,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
     }
   }, [words, selectedWord?.id]);
 
-  const wordsAndPhrases = words.filter((w) => w.word_type !== 'sentence' && !w.is_archived);
+  const wordsAndPhrases = words.filter((w) => w.word_type === 'word' && !w.is_archived);
   const phrases = words.filter((w) => w.word_type === 'phrase' && !w.is_archived);
   const archived = words.filter((w) => w.is_archived);
   const sentences = words.filter((w) => w.word_type === 'sentence' && !w.is_archived);
