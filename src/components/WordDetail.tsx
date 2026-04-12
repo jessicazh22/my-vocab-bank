@@ -42,7 +42,7 @@ interface Feedback {
 
 export default function WordDetail({ word, onClose, onWordUpdate, updateWord, practiceWord, isReadOnly = false }: WordDetailProps) {
   const [learningMode, setLearningMode] = useState(false);
-  const [showCard, setShowCard] = useState(false);
+  const [showCard, setShowCard] = useState(true);
   const [userSentence, setUserSentence] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [evaluating, setEvaluating] = useState(false);
@@ -316,7 +316,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
 
           {/* Flashcard */}
           <div className="flashcard">
-            <div className={`flashcard-inner flashcard-enter ${!showCard ? 'flipped' : ''}`}>
+            <div className={`flashcard-inner ${!showCard ? 'flipped' : ''}`}>
               {/* FRONT — Word Details */}
               <div className="flashcard-front">
                 <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 space-y-5">
