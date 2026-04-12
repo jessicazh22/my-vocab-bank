@@ -330,6 +330,11 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
             {word.definition}
           </div>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {word.word_type === 'phrase' && (
+              <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">
+                phrase
+              </span>
+            )}
             {word.source_tag && tagColor && (
               <button
                 onClick={(e) => toggleFavoriteSource(e, word.source_tag!)}
@@ -472,7 +477,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                   activeSection === 'archive' ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-500'
                 }`}
               >
-                archive ({archived.length})
+                archive
               </button>
             )}
 
