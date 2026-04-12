@@ -167,14 +167,7 @@ export function useVocabulary() {
     }).select().single();
 
     if (error) {
-      // Check if it's a duplicate constraint violation
-      if (error.code === '23505') {
-        console.error('Word already exists:', cleanedWord);
-        // Return a special error object to indicate duplicate
-        throw new Error(`"${cleanedWord}" already exists in your vocabulary`);
-      }
       console.error('Failed to add word:', error);
-      throw error;
     } else if (newWord) {
       // Immediately prepend to state — don't wait for real-time subscription
       setWords(prev => [newWord, ...prev]);
@@ -209,6 +202,7 @@ export function useVocabulary() {
   };
 
   const deleteWord = async (id: string) => {
+    setWords((prev) => prev.filter((w) => w.id !== id));
     await supabase.from('vocabulary').delete().eq('id', id);
   };
 
