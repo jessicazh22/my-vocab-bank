@@ -18,8 +18,6 @@ interface RequestPayload {
   history?: ChatMessage[];
 }
 
-const GROQ_API_KEY = "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";
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -41,14 +39,40 @@ Answer their questions concisely and helpfully. Keep responses brief (2-4 senten
       { role: "user", content: question },
     ];
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
+    // Try Groq first, fall back to OpenAI if needed
+    const groqKey = Deno.env.get("GROQ_API_KEY");
+    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    
+    let apiUrl: string;
+    let headers: Record<string, string>;
+    
+    if (groqKey) {
+      apiUrl = "https://api.groq.com/openai/v1/chat/completions";
+      headers = {
+        "Authorization": `Bearer ${groqKey}`,
         "Content-Type": "application/json",
-      },
+      };
+    } else if (openaiKey) {
+      apiUrl = "https://api.openai.com/v1/chat/completions";
+      headers = {
+        "Authorization": `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      };
+    } else {
+      return new Response(
+        JSON.stringify({ error: "No API key configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers,
       body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: groqKey ? "llama-3.1-8b-instant" : "gpt-3.5-turbo",
         messages,
         max_tokens: 250,
         temperature: 0.7,
@@ -58,6 +82,7 @@ Answer their questions concisely and helpfully. Keep responses brief (2-4 senten
     const data = await response.json();
 
     if (!response.ok) {
+      console.error('[ask-vocabulary] API error:', { status: response.status, data });
       return new Response(
         JSON.stringify({ error: "AI request failed", details: data }),
         {
@@ -76,6 +101,7 @@ Answer their questions concisely and helpfully. Keep responses brief (2-4 senten
       }
     );
   } catch (error) {
+    console.error('[ask-vocabulary] Exception:', error);
     return new Response(
       JSON.stringify({ error: "Failed to process request", details: String(error) }),
       {
