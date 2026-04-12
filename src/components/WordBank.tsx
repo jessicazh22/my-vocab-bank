@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { VocabularyWord } from '../lib/supabase';
-import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive, ChevronDown } from 'lucide-react';
+import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive } from 'lucide-react';
 import WordDetail from './WordDetail';
 import Confetti from './Confetti';
 
@@ -21,7 +21,7 @@ function getTagColor(tag: string) {
   return SOURCE_TAG_COLORS[Math.abs(hash) % SOURCE_TAG_COLORS.length];
 }
 
-type NavSection = 'NEED_TO_LEARN' | 'NEED_TO_USE' | 'KNOW_WELL' | 'PHRASES';
+type NavSection = 'NEED_TO_LEARN' | 'NEED_TO_USE' | 'KNOW_WELL';
 
 interface WordBankProps {
   words: VocabularyWord[];
@@ -47,7 +47,6 @@ const NAV_SECTIONS: { key: NavSection; label: string }[] = [
   { key: 'NEED_TO_LEARN', label: 'Need to Learn' },
   { key: 'NEED_TO_USE',   label: 'Use More Often' },
   { key: 'KNOW_WELL',     label: 'Know Well' },
-  { key: 'PHRASES',       label: 'Phrases' },
 ];
 
 function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> {
@@ -66,7 +65,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
   useEffect(() => {
     if (weeklyMode) setActiveNavSection('NEED_TO_USE');
   }, [weeklyMode]);
-  const [activeSection, setActiveSection] = useState<'words' | 'sentences'>('words');
+  const [activeSection, setActiveSection] = useState<'words' | 'phrases' | 'sentences' | 'archive'>('words');
   const [activeNavSection, setActiveNavSection] = useState<NavSection>('NEED_TO_LEARN');
   const [selectedWord, setSelectedWord] = useState<VocabularyWord | null>(null);
   const [dragOverSection, setDragOverSection] = useState<NavSection | null>(null);
@@ -361,26 +360,88 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
       <div className="flex gap-8">
         <aside className="w-48 flex-shrink-0">
           <nav className="sticky top-24 space-y-6">
-            <div className="relative mb-4">
-              <select
-                value={activeSection}
-                onChange={(e) => setActiveSection(e.target.value as 'words' | 'phrases' | 'archive' | 'sentences')}
-                className="appearance-none bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-lg px-3 py-2 pr-8 w-full cursor-pointer hover:border-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+            {/* Top-level section switcher */}
+            <div className="flex items-center gap-1 text-[11px] text-zinc-600 mb-5">
+              <button
+                onClick={() => setActiveSection('words')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  activeSection === 'words' ? 'bg-zinc-800 text-zinc-300' : 'hover:text-zinc-400'
+                }`}
               >
-                <option value="words">Words</option>
-                <option value="phrases">Phrases</option>
-                <option value="sentences">Sentences</option>
-                {archived.length > 0 && <option value="archive">Archive ({archived.length})</option>}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                words
+              </button>
+              <span>/</span>
+              <button
+                onClick={() => setActiveSection('phrases')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  activeSection === 'phrases' ? 'bg-zinc-800 text-zinc-300' : 'hover:text-zinc-400'
+                }`}
+              >
+                phrases
+              </button>
+              <span>/</span>
+              <button
+                onClick={() => setActiveSection('sentences')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  activeSection === 'sentences' ? 'bg-zinc-800 text-zinc-300' : 'hover:text-zinc-400'
+                }`}
+              >
+                sentences
+              </button>
             </div>
 
-            {(activeSection === 'words' || activeSection === 'phrases') && (
+            {/* Words sub-nav (3 categories + phrases drop target) */}
+            {activeSection === 'words' && (
               <div className="space-y-1">
                 {NAV_SECTIONS.map(({ key, label }) => (
                   <button
                     key={key}
-                    onClick={() => { setActiveSection('words'); setActiveNavSection(key); }}
+                    onClick={() => setActiveNavSection(key)}
+                    onDragOver={(e) => { handleDragOver(e); setDragOverSection(key); }}
+                    onDragLeave={() => setDragOverSection(null)}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      setDragOverSection(null);
+                      const wordId = e.dataTransfer.getData('wordId');
+                      if (wordId) {
+                        await updateWord(wordId, { ...getWordUpdatesForSection(key), word_type: 'word' });
+                        setActiveNavSection(key);
+                      }
+                    }}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                      activeNavSection === key
+                        ? 'bg-zinc-800 text-zinc-100'
+                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                    } ${dragOverSection === key ? 'ring-2 ring-teal-500/50 bg-zinc-800/60' : ''}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Phrases drop target shown when viewing words */}
+            {activeSection === 'words' && (
+              <div
+                onDragOver={(e) => { handleDragOver(e); setDragOverPhrases(true); }}
+                onDragLeave={() => setDragOverPhrases(false)}
+                onDrop={handleDropOnPhrases}
+                className={`w-full px-3 py-2 rounded-lg text-xs transition-all border border-dashed mt-3 ${
+                  dragOverPhrases
+                    ? 'border-zinc-500 bg-zinc-800/60 text-zinc-400'
+                    : 'border-zinc-800 text-zinc-700'
+                }`}
+              >
+                drop here → phrases
+              </div>
+            )}
+
+            {/* Phrases: drop back to word categories */}
+            {activeSection === 'phrases' && (
+              <div className="space-y-1">
+                {NAV_SECTIONS.map(({ key, label }) => (
+                  <div
+                    key={key}
                     onDragOver={(e) => { handleDragOver(e); setDragOverSection(key); }}
                     onDragLeave={() => setDragOverSection(null)}
                     onDrop={async (e) => {
@@ -393,32 +454,26 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                         setActiveNavSection(key);
                       }
                     }}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      activeSection === 'words' && activeNavSection === key
-                        ? 'bg-zinc-800 text-zinc-100'
-                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
-                    } ${dragOverSection === key ? 'ring-2 ring-teal-500/50 bg-zinc-800/60' : ''}`}
+                    className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all border border-dashed text-zinc-700 border-zinc-800 ${
+                      dragOverSection === key ? 'border-zinc-500 bg-zinc-800/60 text-zinc-400' : ''
+                    }`}
                   >
-                    <span>{label}</span>
-                  </button>
+                    {label}
+                  </div>
                 ))}
-
-                <div
-                  onDragOver={(e) => { handleDragOver(e); setDragOverPhrases(true); }}
-                  onDragLeave={() => setDragOverPhrases(false)}
-                  onDrop={handleDropOnPhrases}
-                  onClick={() => setActiveSection('phrases')}
-                  className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all border border-dashed mt-2 cursor-pointer ${
-                    activeSection === 'phrases'
-                      ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
-                      : dragOverPhrases
-                        ? 'border-blue-500/60 bg-blue-500/10 text-blue-300'
-                        : 'border-zinc-700/50 text-zinc-600 hover:border-zinc-600 hover:text-zinc-500'
-                  }`}
-                >
-                  Phrases
-                </div>
               </div>
+            )}
+
+            {/* Archive link */}
+            {archived.length > 0 && (
+              <button
+                onClick={() => setActiveSection('archive')}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors mt-4 ${
+                  activeSection === 'archive' ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-500'
+                }`}
+              >
+                archive ({archived.length})
+              </button>
             )}
 
           </nav>
