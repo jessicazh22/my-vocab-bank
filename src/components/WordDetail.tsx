@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, BookMarked, GraduationCap, Loader2, RefreshCw, Undo2, Sparkles, RotateCcw, Globe, Lock } from 'lucide-react';
+import { X, BookMarked, GraduationCap, Loader2, RefreshCw, Undo2, Check, Sparkles, RotateCcw, Globe, Lock } from 'lucide-react';
 import { VocabularyWord, callEdgeFunction } from '../lib/supabase';
 import { getTagColor } from '../lib/utils';
 import ChatPanel from './ChatPanel';
@@ -22,6 +22,7 @@ interface PreviousEnrichment {
 interface Feedback {
   correct: boolean;
   feedback: string;
+  suggestion?: string | null;
 }
 
 export default function WordDetail({ word, onClose, onWordUpdate, updateWord, practiceWord, isReadOnly = false }: WordDetailProps) {
@@ -321,8 +322,21 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
 
                   {feedback && (
                     <div className="space-y-4">
-                      <div className="p-4 rounded-xl border bg-zinc-800/50 border-zinc-700/50">
-                        <p className="text-zinc-300 text-sm leading-relaxed">{feedback.feedback}</p>
+                      <div className={`p-4 rounded-xl border ${feedback.correct ? 'bg-emerald-900/20 border-emerald-700/50' : 'bg-rose-900/20 border-rose-700/50'}`}>
+                        <div className="flex items-start gap-3">
+                          <div className={`p-1.5 rounded-full shrink-0 ${feedback.correct ? 'bg-emerald-600' : 'bg-rose-600'}`}>
+                            {feedback.correct ? <Check size={14} className="text-white" /> : <X size={14} className="text-white" />}
+                          </div>
+                          <div className="space-y-2">
+                            <p className={`font-medium ${feedback.correct ? 'text-emerald-300' : 'text-rose-300'}`}>
+                              {feedback.correct ? 'Great job!' : 'Not quite'}
+                            </p>
+                            <p className="text-zinc-400 text-sm leading-relaxed">{feedback.feedback}</p>
+                            {feedback.suggestion && (
+                              <p className="text-zinc-500 text-sm leading-relaxed border-t border-zinc-700/50 pt-2 mt-2">{feedback.suggestion}</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="bg-zinc-800/30 rounded-lg p-3">

@@ -15,6 +15,7 @@ interface RequestPayload {
 interface EvaluationResponse {
   correct: boolean;
   feedback: string;
+  suggestion?: string | null;
 }
 
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
@@ -39,21 +40,18 @@ Deno.serve(async (req: Request) => {
 
     const systemPrompt = `You are a vocabulary coach evaluating a student's sentence.
 
-Given a word, its definition, and a student's sentence, evaluate the usage and suggest an improvement.
-
 Return ONLY this JSON:
 {
   "correct": true/false,
-  "feedback": "One sentence on whether the target word is used correctly, followed by: 'One way you could improve this is to rephrase [quote the specific awkward phrase] — try [concrete alternative] instead.'"
+  "feedback": "One sentence: is the target word used correctly?",
+  "suggestion": null
 }
 
 Rules:
-- First part of feedback: focus solely on whether the target word's meaning and usage is correct
-- Second part: quote the specific phrase that's awkward or unclear, then give a concrete inline alternative. Start with "One way you could improve this is..."
-- If the sentence is already strong and idiomatic, suggest a richer or more vivid variation instead
-- Never use structural terms like "first clause", "second clause", or "this construction"
-- Keep the full feedback to 2-3 sentences max
-- Be constructive and specific — vague praise like "great sentence!" is not useful
+- feedback: focus on whether the target word is used correctly
+- suggestion: read the whole sentence as a native speaker. If any phrase sounds unnatural or awkward, quote it and give a natural alternative (e.g. "about-to-become father" → "expectant father" or "soon-to-be father"). Return null if the sentence already sounds natural — do NOT force a suggestion.
+- Never use structural terms like "first clause", "second clause"
+- Keep feedback and suggestion to 1–2 sentences each
 - Return ONLY the JSON object, no other text`;
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -68,7 +66,7 @@ Rules:
           { role: "system", content: systemPrompt },
           { role: "user", content: `Word: "${word}"\nDefinition: "${definition}"\nStudent's sentence: "${sentence}"` },
         ],
-        max_tokens: 250,
+        max_tokens: 150,
         temperature: 0.3,
       }),
     });
