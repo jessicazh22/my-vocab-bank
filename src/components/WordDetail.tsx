@@ -516,18 +516,28 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
 
                     {!chatLoading && (
                       <div className="relative">
-                        <input
-                          type="text"
+                        <textarea
                           value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAskAI()}
+                          onChange={(e) => {
+                            setChatInput(e.target.value);
+                            e.target.style.height = 'auto';
+                            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleAskAI();
+                            }
+                          }}
                           placeholder={chatHistory.length > 0 ? "Follow up..." : "How would I use this naturally?"}
-                          className="w-full px-4 py-2.5 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-amber-600/50 pr-10 text-sm"
+                          rows={1}
+                          className="w-full px-4 py-2.5 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-amber-600/50 pr-10 text-sm resize-none overflow-hidden"
+                          style={{ minHeight: '42px' }}
                         />
                         <button
                           onClick={handleAskAI}
                           disabled={!chatInput.trim() || aiLoading}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-500 hover:text-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="absolute right-2 top-3 p-1.5 text-zinc-500 hover:text-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {chatHistory.length > 0 ? (
                             <Send size={16} />
