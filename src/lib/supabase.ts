@@ -46,3 +46,15 @@ export type WordChat = {
   created_at: string;
   updated_at: string;
 };
+
+export async function callEdgeFunction<T = unknown>(name: string, payload: unknown): Promise<T> {
+  const res = await fetch(`${supabaseUrl}/functions/v1/${name}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  return res.json() as Promise<T>;
+}

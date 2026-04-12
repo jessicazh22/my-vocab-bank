@@ -1,25 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { VocabularyWord } from '../lib/supabase';
+import { getTagColor } from '../lib/utils';
 import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive } from 'lucide-react';
 import WordDetail from './WordDetail';
 import Confetti from './Confetti';
-
-const SOURCE_TAG_COLORS = [
-  { bg: 'bg-rose-500/20', text: 'text-rose-300', border: 'border-rose-500/30' },
-  { bg: 'bg-amber-500/20', text: 'text-amber-300', border: 'border-amber-500/30' },
-  { bg: 'bg-emerald-500/20', text: 'text-emerald-300', border: 'border-emerald-500/30' },
-  { bg: 'bg-cyan-500/20', text: 'text-cyan-300', border: 'border-cyan-500/30' },
-  { bg: 'bg-blue-500/20', text: 'text-blue-300', border: 'border-blue-500/30' },
-  { bg: 'bg-fuchsia-500/20', text: 'text-fuchsia-300', border: 'border-fuchsia-500/30' },
-];
-
-function getTagColor(tag: string) {
-  let hash = 0;
-  for (let i = 0; i < tag.length; i++) {
-    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return SOURCE_TAG_COLORS[Math.abs(hash) % SOURCE_TAG_COLORS.length];
-}
 
 type NavSection = 'NEED_TO_LEARN' | 'NEED_TO_USE' | 'KNOW_WELL';
 
@@ -183,7 +167,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
 
   const [exitingWordId, setExitingWordId] = useState<string | null>(null);
 
-
   const handleConfettiComplete = useCallback(() => {
     setConfettiOrigin(null);
   }, []);
@@ -282,7 +265,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
           !weeklyMode && !bulkArchiveMode && (isNeedToUse ? 'border-teal-900/30 hover:border-teal-800/50' : 'border-zinc-700/50 hover:border-zinc-600')
         } ${isCelebrating ? 'animate-celebrate' : ''} ${isExiting ? 'animate-card-exit' : 'animate-card-enter'}`}
       >
-        {/* Weekly mode checkbox */}
         {weeklyMode && (
           <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
             isWeeklySelected ? 'bg-amber-500 border-amber-500' : 'border-zinc-600'
@@ -291,7 +273,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
           </div>
         )}
 
-        {/* Bulk archive mode checkbox */}
         {bulkArchiveMode && (
           <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
             isBulkSelected ? 'bg-red-500 border-red-500' : 'border-zinc-600'
@@ -300,7 +281,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
           </div>
         )}
 
-        {/* Normal move button and quick archive (hidden in weekly/bulk archive mode) */}
         {!isReadOnly && !weeklyMode && !bulkArchiveMode && (
           <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
             <button
@@ -335,11 +315,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                 phrase
               </span>
             )}
-            {word.is_conversational && (
-              <span className="text-[10px] text-blue-400 bg-blue-500/20 px-1.5 py-0.5 rounded border border-blue-500/50">
-                💬 conversational
-              </span>
-            )}
             {word.source_tag && tagColor && (
               <button
                 onClick={(e) => toggleFavoriteSource(e, word.source_tag!)}
@@ -370,7 +345,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
       <div className="flex gap-8">
         <aside className="w-48 flex-shrink-0">
           <nav className="sticky top-24 space-y-6">
-            {/* Top-level section switcher */}
             <div className="flex items-center gap-1 text-[11px] text-zinc-600 mb-5">
               <button
                 onClick={() => setActiveSection('words')}
@@ -400,7 +374,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
               </button>
             </div>
 
-            {/* Words sub-nav (3 categories + phrases drop target) */}
             {activeSection === 'words' && (
               <div className="space-y-1">
                 {NAV_SECTIONS.map(({ key, label }) => (
@@ -430,7 +403,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
               </div>
             )}
 
-            {/* Phrases drop target shown when viewing words */}
             {activeSection === 'words' && (
               <div
                 onDragOver={(e) => { handleDragOver(e); setDragOverPhrases(true); }}
@@ -446,7 +418,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
               </div>
             )}
 
-            {/* Phrases: drop back to word categories */}
             {activeSection === 'phrases' && (
               <div className="space-y-1">
                 {NAV_SECTIONS.map(({ key, label }) => (
@@ -474,7 +445,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
               </div>
             )}
 
-            {/* Archive link */}
             {archived.length > 0 && (
               <button
                 onClick={() => setActiveSection('archive')}
@@ -485,12 +455,10 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                 archive
               </button>
             )}
-
           </nav>
         </aside>
 
         <main className="flex-1 min-w-0">
-          {/* Bulk archive button for non-archive sections */}
           {activeSection !== 'archive' && !bulkArchiveMode && !weeklyMode && (
             <div className="flex justify-end mb-3">
               <button
@@ -527,16 +495,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
             <>
               <div className="flex items-center justify-between mb-4">
                 <p className="text-zinc-500 text-xs">Archived items can be restored by editing them.</p>
-                {bulkArchiveMode && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { setBulkArchiveMode(false); setBulkArchiveSelected(new Set()); }}
-                      className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors px-2 py-1 rounded"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
               </div>
               {archived.length === 0 ? (
                 <div className="text-zinc-600 text-sm italic py-8">No archived items yet</div>
@@ -593,7 +551,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                             : 'border-zinc-700/50 hover:border-zinc-600'
                         }`}
                       >
-                        {/* Bulk archive mode checkbox */}
                         {bulkArchiveMode && (
                           <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                             isBulkSelected ? 'bg-red-500 border-red-500' : 'border-zinc-600'
@@ -601,8 +558,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                             {isBulkSelected && <Check size={11} className="text-zinc-900" />}
                           </div>
                         )}
-                        
-                        {/* Quick archive button */}
+
                         {!bulkArchiveMode && (
                           <button
                             onClick={(e) => handleQuickArchive(e, sentence.id)}
@@ -612,7 +568,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                             <Archive size={14} />
                           </button>
                         )}
-                        
+
                         <div className="flex-1 min-w-0 pr-8">
                           <div className="text-zinc-200 text-sm leading-relaxed">{sentence.word}</div>
                           {sentence.definition && (
@@ -690,7 +646,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
         onComplete={handleConfettiComplete}
       />
 
-      {/* Bulk archive floating bar */}
       {bulkArchiveMode && activeSection !== 'archive' && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 shadow-2xl max-w-sm w-full mx-4">
           <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
@@ -720,7 +675,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
         </div>
       )}
 
-      {/* Weekly mode floating bar */}
       {weeklyMode && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 shadow-2xl max-w-sm w-full mx-4">
           <p className="text-xs text-zinc-400 mb-3 leading-relaxed">

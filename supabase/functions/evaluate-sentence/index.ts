@@ -17,13 +17,20 @@ interface EvaluationResponse {
   feedback: string;
 }
 
-const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "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";
+const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
       headers: corsHeaders,
+    });
+  }
+
+  if (!GROQ_API_KEY) {
+    return new Response(JSON.stringify({ error: "GROQ_API_KEY not configured" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
