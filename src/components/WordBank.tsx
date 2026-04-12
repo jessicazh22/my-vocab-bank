@@ -21,7 +21,7 @@ function getTagColor(tag: string) {
   return SOURCE_TAG_COLORS[Math.abs(hash) % SOURCE_TAG_COLORS.length];
 }
 
-type NavSection = 'NEED_TO_LEARN' | 'NEED_TO_USE' | 'KNOW_WELL';
+type NavSection = 'NEED_TO_LEARN' | 'NEED_TO_USE' | 'KNOW_WELL' | 'PHRASES';
 
 interface WordBankProps {
   words: VocabularyWord[];
@@ -43,10 +43,11 @@ interface ContextMenuState {
   wordId: string | null;
 }
 
-const NAV_SECTIONS: { key: NavSection; label: string; icon: 'book' | 'rotate' | 'check' }[] = [
-  { key: 'NEED_TO_LEARN', label: 'Need to Learn', icon: 'book' },
-  { key: 'NEED_TO_USE',   label: 'Use More Often', icon: 'rotate' },
-  { key: 'KNOW_WELL',     label: 'Know Well', icon: 'check' },
+const NAV_SECTIONS: { key: NavSection; label: string }[] = [
+  { key: 'NEED_TO_LEARN', label: 'Need to Learn' },
+  { key: 'NEED_TO_USE',   label: 'Use More Often' },
+  { key: 'KNOW_WELL',     label: 'Know Well' },
+  { key: 'PHRASES',       label: 'Phrases' },
 ];
 
 function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> {
@@ -65,7 +66,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
   useEffect(() => {
     if (weeklyMode) setActiveNavSection('NEED_TO_USE');
   }, [weeklyMode]);
-  const [activeSection, setActiveSection] = useState<'words' | 'phrases' | 'archive' | 'sentences'>('words');
+  const [activeSection, setActiveSection] = useState<'words' | 'sentences'>('words');
   const [activeNavSection, setActiveNavSection] = useState<NavSection>('NEED_TO_LEARN');
   const [selectedWord, setSelectedWord] = useState<VocabularyWord | null>(null);
   const [dragOverSection, setDragOverSection] = useState<NavSection | null>(null);
