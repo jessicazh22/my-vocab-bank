@@ -63,7 +63,7 @@ const DB_UPDATE_FIELDS = new Set([
   'word', 'definition', 'example_sentence', 'context', 'usage_hint',
   'source_tag', 'sentence_starters', 'scaffold_prompt', 'category',
   'word_type', 'familiarity', 'practice_count', 'last_practiced',
-  'user_sentences', 'added_date', 'is_public', 'is_archived',
+  'user_sentences', 'added_date', 'is_public', 'is_archived', 'is_conversational',
 ]);
 
 function sanitizeUpdates(updates: Partial<VocabularyWord>): Record<string, unknown> {
@@ -167,7 +167,14 @@ export function useVocabulary() {
     }).select().single();
 
     if (error) {
+      // Check if it's a duplicate constraint violation
+      if (error.code === '23505') {
+        console.error('Word already exists:', cleanedWord);
+        // Return a special error object to indicate duplicate
+        throw new Error(`"${cleanedWord}" already exists in your vocabulary`);
+      }
       console.error('Failed to add word:', error);
+      throw error;
     } else if (newWord) {
       // Immediately prepend to state — don't wait for real-time subscription
       setWords(prev => [newWord, ...prev]);
