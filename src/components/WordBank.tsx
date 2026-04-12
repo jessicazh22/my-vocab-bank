@@ -69,6 +69,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
   const [activeNavSection, setActiveNavSection] = useState<NavSection>('NEED_TO_LEARN');
   const [selectedWord, setSelectedWord] = useState<VocabularyWord | null>(null);
   const [dragOverSection, setDragOverSection] = useState<NavSection | null>(null);
+  const [dragOverPhrases, setDragOverPhrases] = useState(false);
   const [bulkArchiveMode, setBulkArchiveMode] = useState(false);
   const [bulkArchiveSelected, setBulkArchiveSelected] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -123,6 +124,15 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
     const wordId = e.dataTransfer.getData('wordId');
     if (wordId) {
       await updateWord(wordId, getWordUpdatesForSection(section));
+    }
+  };
+
+  const handleDropOnPhrases = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverPhrases(false);
+    const wordId = e.dataTransfer.getData('wordId');
+    if (wordId) {
+      await updateWord(wordId, { word_type: 'phrase' });
     }
   };
 
@@ -369,17 +379,26 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
             </div>
 
-            {activeSection === 'words' && (
+            {(activeSection === 'words' || activeSection === 'phrases') && (
               <div className="space-y-1">
                 {NAV_SECTIONS.map(({ key, label }) => (
                   <button
                     key={key}
-                    onClick={() => setActiveNavSection(key)}
+                    onClick={() => { setActiveSection('words'); setActiveNavSection(key); }}
                     onDragOver={(e) => { handleDragOver(e); setDragOverSection(key); }}
                     onDragLeave={() => setDragOverSection(null)}
-                    onDrop={(e) => handleDropOnSection(e, key)}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      setDragOverSection(null);
+                      const wordId = e.dataTransfer.getData('wordId');
+                      if (wordId) {
+                        await updateWord(wordId, { ...getWordUpdatesForSection(key), word_type: 'word' });
+                        setActiveSection('words');
+                        setActiveNavSection(key);
+                      }
+                    }}
                     className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      activeNavSection === key
+                      activeSection === 'words' && activeNavSection === key
                         ? 'bg-zinc-800 text-zinc-100'
                         : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
                     } ${dragOverSection === key ? 'ring-2 ring-teal-500/50 bg-zinc-800/60' : ''}`}
@@ -387,6 +406,22 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
                     <span>{label}</span>
                   </button>
                 ))}
+
+                <div
+                  onDragOver={(e) => { handleDragOver(e); setDragOverPhrases(true); }}
+                  onDragLeave={() => setDragOverPhrases(false)}
+                  onDrop={handleDropOnPhrases}
+                  onClick={() => setActiveSection('phrases')}
+                  className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all border border-dashed mt-2 cursor-pointer ${
+                    activeSection === 'phrases'
+                      ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+                      : dragOverPhrases
+                        ? 'border-blue-500/60 bg-blue-500/10 text-blue-300'
+                        : 'border-zinc-700/50 text-zinc-600 hover:border-zinc-600 hover:text-zinc-500'
+                  }`}
+                >
+                  Phrases
+                </div>
               </div>
             )}
 
@@ -420,7 +455,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
           ) : activeSection === 'phrases' ? (
             <>
               {phrases.length === 0 ? (
-                <div className="text-zinc-600 text-sm italic py-8">No phrases yet</div>
+                <div className="text-zinc-600 text-sm italic py-8">No phrases yet. Drag a word onto the Phrases target in the sidebar to move it here.</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {phrases.map((phrase) => renderWordCard(phrase))}
