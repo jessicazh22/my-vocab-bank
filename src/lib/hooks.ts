@@ -63,7 +63,7 @@ const DB_UPDATE_FIELDS = new Set([
   'word', 'definition', 'example_sentence', 'context', 'usage_hint',
   'source_tag', 'sentence_starters', 'scaffold_prompt', 'category',
   'word_type', 'familiarity', 'practice_count', 'last_practiced',
-  'user_sentences', 'added_date', 'is_public',
+  'user_sentences', 'added_date', 'is_public', 'is_archived',
 ]);
 
 function sanitizeUpdates(updates: Partial<VocabularyWord>): Record<string, unknown> {
@@ -205,6 +205,10 @@ export function useVocabulary() {
     await supabase.from('vocabulary').delete().eq('id', id);
   };
 
+  const archiveWord = async (id: string) => {
+    await updateWord(id, { is_archived: true });
+  };
+
   const practiceWord = async (id: string, userSentence: string) => {
     const word = words.find((w) => w.id === id);
     if (!word) return;
@@ -249,6 +253,7 @@ export function useVocabulary() {
     addWord,
     updateWord,
     deleteWord,
+    archiveWord,
     practiceWord,
     bulkImport,
     checkDuplicate,

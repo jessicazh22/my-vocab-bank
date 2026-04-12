@@ -28,6 +28,7 @@ export type VocabularyWord = {
   last_practiced?: string;
   user_sentences: string[];
   is_public: boolean;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
 };
