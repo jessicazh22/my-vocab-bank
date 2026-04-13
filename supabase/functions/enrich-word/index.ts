@@ -83,7 +83,9 @@ Deno.serve(async (req: Request) => {
         const jsonMatch = shortContent.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          return new Response(JSON.stringify({ definition: parsed.definition }), {
+          const def = parsed.definition as string | undefined;
+          const lowercasedDef = def ? def.charAt(0).toLowerCase() + def.slice(1) : def;
+          return new Response(JSON.stringify({ definition: lowercasedDef }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
@@ -126,6 +128,7 @@ Return ONLY a JSON object:
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           if (parsed.definition) {
+            parsed.definition = parsed.definition.charAt(0).toLowerCase() + parsed.definition.slice(1);
             return new Response(JSON.stringify(parsed), {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });

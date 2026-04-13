@@ -156,6 +156,8 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                           rows={4}
                           className="w-full px-4 py-3 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-zinc-500 resize-none"
                           autoFocus
+                          spellCheck
+                          autoCorrect="on"
                         />
                       </div>
                       <button

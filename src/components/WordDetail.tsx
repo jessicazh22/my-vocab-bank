@@ -303,6 +303,8 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                         rows={3}
                         className="w-full px-4 py-3 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-amber-600/50 resize-none text-sm"
                         autoFocus
+                        spellCheck
+                        autoCorrect="on"
                       />
 
                       <button
@@ -407,6 +409,8 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                   onChange={(e) => setDefinitionDraft(e.target.value)}
                   rows={2}
                   autoFocus
+                  spellCheck
+                  autoCorrect="on"
                   className="w-full px-3 py-2 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-600 focus:outline-none focus:border-zinc-400 resize-none text-sm leading-relaxed"
                 />
                 <div className="flex gap-2">
