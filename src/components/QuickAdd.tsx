@@ -68,6 +68,7 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
   const [isAdding, setIsAdding] = useState(false);
   const [addingStatus, setAddingStatus] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [correctionInfo, setCorrectionInfo] = useState<{ original: string; corrected: string } | null>(null);
 
   const enrichWord = async (word: string, isPhrase: boolean) => {
     try {
@@ -77,6 +78,7 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
         examples: data.examples as string[] | undefined,
         context: data.context as string | undefined,
         scaffoldPrompt: data.scaffoldPrompt as string | undefined,
+        correction: data.correction as string | null | undefined,
       };
     } catch {
       return {};
@@ -122,9 +124,11 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
     await doAddWord(word, definition);
   };
 
-  const doAddWord = async (word: string, definition?: string) => {
+  const doAddWord = async (inputWord: string, definition?: string) => {
     setIsAdding(true);
+    setCorrectionInfo(null);
 
+    let word = inputWord;
     let finalDefinition = definition || '';
     let aiExamples: string[] | undefined;
     let aiContext: string | undefined;
@@ -132,12 +136,19 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
 
     if (!definition) {
       setAddingStatus('Finding definition...');
-      const isPhrase = word.includes(' ');
-      const enriched = await enrichWord(word, isPhrase);
+      const isPhrase = inputWord.includes(' ');
+      const enriched = await enrichWord(inputWord, isPhrase);
       finalDefinition = enriched.definition || '';
       aiExamples = enriched.examples;
       aiContext = enriched.context;
       aiScaffold = enriched.scaffoldPrompt;
+
+      // Apply spelling correction if the model detected one
+      if (enriched.correction && enriched.correction.toLowerCase() !== inputWord.toLowerCase()) {
+        word = enriched.correction;
+        setCorrectionInfo({ original: inputWord, corrected: enriched.correction });
+        setInput(enriched.correction);
+      }
     }
 
     setAddingStatus('Adding...');
@@ -165,6 +176,7 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
       setExampleSentence('');
       setSourceTag('');
       setShowMore(false);
+      setCorrectionInfo(null);
     });
   };
 
@@ -259,7 +271,7 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
               <input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => { setInput(e.target.value); setCorrectionInfo(null); }}
                 onKeyDown={handleKeyDown}
                 placeholder="Type a word or phrase"
                 className="w-full px-4 py-3 bg-zinc-900 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-zinc-500 text-lg"
@@ -303,6 +315,15 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
                   className="w-full px-4 py-3 bg-zinc-900 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-zinc-500 text-sm"
                 />
               </div>
+            )}
+
+            {correctionInfo && !isAdding && (
+              <p className="text-xs text-zinc-400">
+                Corrected{' '}
+                <span className="line-through text-zinc-600">{correctionInfo.original}</span>
+                {' → '}
+                <span className="text-zinc-200">{correctionInfo.corrected}</span>
+              </p>
             )}
 
             {isAdding ? (

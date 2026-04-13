@@ -98,13 +98,23 @@ Deno.serve(async (req: Request) => {
     // Quick define mode — short definition + examples + context for a word with no definition
     if (defineOnly) {
       const definePrompt = `For the word "${word}", provide a short definition and learning content.
+
+IMPORTANT: First check if "${word}" is spelled correctly. If it appears to be a misspelling, identify the most likely intended word.
+
 Return ONLY a JSON object:
 {
-  "definition": "Very short 3-8 word simple definition. Examples: 'concise and packed with meaning' or 'winding in curves or bends'. No full sentences, no 'means that'. Just a simple, direct phrase.",
+  "correction": null,
+  "definition": "Very short 3-8 word simple definition in lowercase. Examples: 'concise and packed with meaning' or 'winding in curves or bends'. No full sentences, no 'means that'. Just a simple, direct phrase.",
   "examples": ["example 1", "example 2", "example 3"],
-  "context": "When and where to use this word. 2 sentences max.",
+  "context": "Use in [domain/setting] to [purpose]. Works well in [register/tone].",
   "scaffoldPrompt": "A short personal question (under 25 words) to help the learner use this word."
-}`;
+}
+
+Rules:
+- correction: if "${word}" appears misspelled, set to the correct spelling (e.g. "adroit"). If already correct, set to null.
+- definition: 3-8 words, all lowercase, no capitals at start
+- context: exactly 2 sentences. First starts with "Use in..." or similar action verb. Second starts with "Works well in..." or describes the register/tone.
+- Return ONLY the JSON object, no other text`;
 
       const defineResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -115,7 +125,7 @@ Return ONLY a JSON object:
         body: JSON.stringify({
           model: "llama-3.1-8b-instant",
           messages: [{ role: "user", content: definePrompt }],
-          max_tokens: 400,
+          max_tokens: 500,
           temperature: 0.3,
         }),
       });
