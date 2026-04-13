@@ -51,7 +51,7 @@ function saveWeeklyState(state: WeeklyState) {
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { words, loading: wordsLoading, addWord, checkDuplicate, updateWord, deleteWord, archiveWord, bulkArchiveWords, practiceWord } = useVocabulary();
+  const { words, loading: wordsLoading, addWord, checkDuplicate, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord } = useVocabulary();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showLearn, setShowLearn] = useState(false);
@@ -207,6 +207,7 @@ function App() {
             updateWord={updateWord}
             deleteWord={deleteWord}
             archiveWord={archiveWord}
+            unarchiveWord={unarchiveWord}
             bulkArchiveWords={bulkArchiveWords}
             practiceWord={practiceWord}
             isReadOnly={isReadOnly}

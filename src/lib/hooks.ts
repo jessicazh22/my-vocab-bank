@@ -81,6 +81,9 @@ export function useVocabulary() {
   const [loading, setLoading] = useState(true);
   // Track in-flight saves to prevent real-time subscription from overwriting
   const savingRef = useRef(new Set<string>());
+  // Track archived IDs for the entire session — survives fetchWords re-fetches
+  // This prevents race conditions where DB propagation lag reverts archive state
+  const sessionArchivedIds = useRef(new Set<string>());
 
   const fetchWords = async () => {
     const { data, error } = await supabase
@@ -89,17 +92,28 @@ export function useVocabulary() {
       .order('added_date', { ascending: false });
 
     if (!error && data) {
-      // Merge: don't overwrite words that are currently being saved
       setWords(prev => {
-        if (savingRef.current.size === 0) return data;
-        return data.map(fetchedWord => {
-          if (savingRef.current.has(fetchedWord.id)) {
-            // Keep the optimistic local version while save is in flight
-            const localVersion = prev.find(w => w.id === fetchedWord.id);
-            return localVersion || fetchedWord;
-          }
-          return fetchedWord;
-        });
+        // Merge: don't overwrite words that are currently being saved
+        let result: VocabularyWord[];
+        if (savingRef.current.size === 0) {
+          result = data;
+        } else {
+          result = data.map(fetchedWord => {
+            if (savingRef.current.has(fetchedWord.id)) {
+              // Keep the optimistic local version while save is in flight
+              const localVersion = prev.find(w => w.id === fetchedWord.id);
+              return localVersion || fetchedWord;
+            }
+            return fetchedWord;
+          });
+        }
+
+        // Apply session-level archive mask — prevents DB propagation lag
+        // from reverting archive state on subsequent fetchWords calls
+        if (sessionArchivedIds.current.size === 0) return result;
+        return result.map(w =>
+          sessionArchivedIds.current.has(w.id) ? { ...w, is_archived: true } : w
+        );
       });
     }
     setLoading(false);
@@ -207,11 +221,18 @@ export function useVocabulary() {
   };
 
   const archiveWord = async (id: string) => {
+    sessionArchivedIds.current.add(id);
     await updateWord(id, { is_archived: true });
+  };
+
+  const unarchiveWord = async (id: string) => {
+    sessionArchivedIds.current.delete(id);
+    await updateWord(id, { is_archived: false });
   };
 
   const bulkArchiveWords = async (ids: string[]) => {
     if (ids.length === 0) return;
+    ids.forEach(id => sessionArchivedIds.current.add(id));
     setWords(prev => prev.map(w => ids.includes(w.id) ? { ...w, is_archived: true } : w));
     ids.forEach(id => savingRef.current.add(id));
     await supabase.from('vocabulary').update({ is_archived: true, updated_at: new Date().toISOString() }).in('id', ids);
@@ -263,6 +284,7 @@ export function useVocabulary() {
     updateWord,
     deleteWord,
     archiveWord,
+    unarchiveWord,
     bulkArchiveWords,
     practiceWord,
     bulkImport,

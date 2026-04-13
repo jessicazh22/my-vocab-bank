@@ -12,6 +12,7 @@ interface WordBankProps {
   updateWord: (id: string, updates: Partial<VocabularyWord>) => Promise<void>;
   deleteWord: (id: string) => Promise<void>;
   archiveWord: (id: string) => Promise<void>;
+  unarchiveWord: (id: string) => Promise<void>;
   bulkArchiveWords: (ids: string[]) => Promise<void>;
   practiceWord: (id: string, userSentence: string) => Promise<void>;
   isReadOnly?: boolean;
@@ -40,7 +41,7 @@ function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> 
   return { category: 'KNOW_WELL' };
 }
 
-export default function WordBank({ words, updateWord, deleteWord, archiveWord, bulkArchiveWords, practiceWord, isReadOnly = false, weeklyMode = false, weeklySelected = [], onToggleWeeklySelect, onWeeklyClose }: WordBankProps) {
+export default function WordBank({ words, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord, isReadOnly = false, weeklyMode = false, weeklySelected = [], onToggleWeeklySelect, onWeeklyClose }: WordBankProps) {
   const toggleWeeklySelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleWeeklySelect?.(id);
@@ -493,7 +494,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, b
           ) : activeSection === 'archive' ? (
             <>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-zinc-500 text-xs">Archived items can be restored by editing them.</p>
+                <p className="text-zinc-500 text-xs">Hover a word to restore it to the bank.</p>
               </div>
               {archived.length === 0 ? (
                 <div className="text-zinc-600 text-sm italic py-8">No archived items yet</div>
@@ -505,9 +506,17 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, b
                       <div
                         key={word.id}
                         onClick={() => setSelectedWord(word)}
-                        className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors cursor-pointer opacity-75 hover:opacity-100"
+                        className="group relative bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors cursor-pointer opacity-75 hover:opacity-100"
                       >
-                        <div className="flex-1 min-w-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); unarchiveWord(word.id); }}
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2 py-1 rounded text-xs text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-all"
+                          title="Restore to bank"
+                        >
+                          <RotateCcw size={11} />
+                          Restore
+                        </button>
+                        <div className="flex-1 min-w-0 pr-16">
                           <div className="text-zinc-400 text-sm">{word.word}</div>
                           <div className="text-zinc-600 text-xs leading-relaxed mt-1 line-clamp-1">
                             {word.definition}
