@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, VocabularyWord, ChatMessage } from './supabase';
 import { User } from '@supabase/supabase-js';
 
@@ -80,7 +80,7 @@ export function useVocabulary() {
   const [words, setWords] = useState<VocabularyWord[]>([]);
   const [loading, setLoading] = useState(true);
   // Track in-flight saves to prevent real-time subscription from overwriting
-  const savingRef = { current: new Set<string>() };
+  const savingRef = useRef(new Set<string>());
 
   const fetchWords = async () => {
     const { data, error } = await supabase
@@ -210,6 +210,14 @@ export function useVocabulary() {
     await updateWord(id, { is_archived: true });
   };
 
+  const bulkArchiveWords = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setWords(prev => prev.map(w => ids.includes(w.id) ? { ...w, is_archived: true } : w));
+    ids.forEach(id => savingRef.current.add(id));
+    await supabase.from('vocabulary').update({ is_archived: true, updated_at: new Date().toISOString() }).in('id', ids);
+    setTimeout(() => ids.forEach(id => savingRef.current.delete(id)), 2000);
+  };
+
   const practiceWord = async (id: string, userSentence: string) => {
     const word = words.find((w) => w.id === id);
     if (!word) return;
@@ -255,6 +263,7 @@ export function useVocabulary() {
     updateWord,
     deleteWord,
     archiveWord,
+    bulkArchiveWords,
     practiceWord,
     bulkImport,
     checkDuplicate,

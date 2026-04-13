@@ -12,6 +12,7 @@ interface WordBankProps {
   updateWord: (id: string, updates: Partial<VocabularyWord>) => Promise<void>;
   deleteWord: (id: string) => Promise<void>;
   archiveWord: (id: string) => Promise<void>;
+  bulkArchiveWords: (ids: string[]) => Promise<void>;
   practiceWord: (id: string, userSentence: string) => Promise<void>;
   isReadOnly?: boolean;
   weeklyMode?: boolean;
@@ -39,7 +40,7 @@ function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> 
   return { category: 'KNOW_WELL' };
 }
 
-export default function WordBank({ words, updateWord, deleteWord, archiveWord, practiceWord, isReadOnly = false, weeklyMode = false, weeklySelected = [], onToggleWeeklySelect, onWeeklyClose }: WordBankProps) {
+export default function WordBank({ words, updateWord, deleteWord, archiveWord, bulkArchiveWords, practiceWord, isReadOnly = false, weeklyMode = false, weeklySelected = [], onToggleWeeklySelect, onWeeklyClose }: WordBankProps) {
   const toggleWeeklySelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleWeeklySelect?.(id);
@@ -146,9 +147,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, p
   };
 
   const handleBulkArchive = async () => {
-    for (const id of bulkArchiveSelected) {
-      await archiveWord(id);
-    }
+    await bulkArchiveWords([...bulkArchiveSelected]);
     setBulkArchiveSelected(new Set());
     setBulkArchiveMode(false);
   };
