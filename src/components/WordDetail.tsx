@@ -43,6 +43,28 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     setLocalWord(word);
   }, [word]);
 
+  // Silently generate collocations for existing words that don't have them yet
+  useEffect(() => {
+    if (localWord.collocations || localWord.word_type === 'sentence' || !localWord.definition) return;
+    const generate = async () => {
+      try {
+        const data = await callEdgeFunction<any>('enrich-word', {
+          word: localWord.word,
+          definition: localWord.definition,
+          defineOnly: true,
+        });
+        if (data.collocations?.pairs?.length) {
+          await updateWord(localWord.id, { collocations: data.collocations });
+          setLocalWord(prev => ({ ...prev, collocations: data.collocations }));
+        }
+      } catch {
+        // fail silently — collocations are a nice-to-have
+      }
+    };
+    generate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localWord.id]);
+
   const canLearn = localWord.word_type !== 'sentence';
 
   const getOriginalExample = (exampleStr: string | undefined): string | null => {
