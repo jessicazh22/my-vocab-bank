@@ -37,6 +37,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
   const [localWord, setLocalWord] = useState(word);
   const [previousEnrichment, setPreviousEnrichment] = useState<PreviousEnrichment | null>(null);
   const [scaffoldLoading, setScaffoldLoading] = useState(false);
+  const [showCollocations, setShowCollocations] = useState(false);
 
   useEffect(() => {
     setLocalWord(word);
@@ -57,13 +58,16 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     setFeedback(null);
     setUserSentence('');
 
-    if (!localWord.scaffold_prompt) {
+    const shouldGenerateScaffold = !localWord.scaffold_prompt || localWord.user_sentences.length > 0;
+    if (shouldGenerateScaffold) {
       setScaffoldLoading(true);
       try {
         const needsFullEnrich = !localWord.example_sentence || !localWord.context;
         const data = await callEdgeFunction<any>('enrich-word', {
           word: localWord.word,
           definition: localWord.definition,
+          context: localWord.context,
+          previousSentences: localWord.user_sentences.length > 0 ? localWord.user_sentences : undefined,
           scaffoldOnly: !needsFullEnrich,
         });
         if (data.scaffoldPrompt) {
@@ -510,6 +514,31 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
               <p className="text-zinc-400 leading-relaxed">{localWord.context}</p>
             ) : !localWord.example_sentence ? null : (
               <p className="text-zinc-600 text-sm italic">No context available</p>
+            )}
+            {localWord.collocations && localWord.collocations.pairs.length > 0 && (
+              <div className="mt-3">
+                <button
+                  onClick={() => setShowCollocations(s => !s)}
+                  className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                  How it's typically paired {showCollocations ? '↑' : '→'}
+                </button>
+                {showCollocations && (
+                  <div className="mt-3 space-y-2">
+                    {localWord.collocations.pairs.map((item, i) => (
+                      <div key={i} className="text-sm">
+                        <span className="text-zinc-300">{item.phrase}</span>
+                        {item.note && <span className="text-zinc-500"> — {item.note}</span>}
+                      </div>
+                    ))}
+                    {localWord.collocations.summary && (
+                      <p className="text-zinc-600 text-xs mt-3 leading-relaxed italic">
+                        {localWord.collocations.summary}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

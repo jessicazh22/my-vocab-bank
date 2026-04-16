@@ -9,6 +9,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export type Collocation = {
+  phrase: string;
+  note?: string;
+};
+
+export type CollocationsData = {
+  pairs: Collocation[];
+  summary?: string;
+};
+
 export type VocabularyWord = {
   id: string;
   user_id: string;
@@ -29,6 +39,7 @@ export type VocabularyWord = {
   user_sentences: string[];
   is_public: boolean;
   is_archived: boolean;
+  collocations?: CollocationsData;
   created_at: string;
   updated_at: string;
 };

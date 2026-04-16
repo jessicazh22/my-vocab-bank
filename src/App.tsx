@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
-import { useAuth, useVocabulary } from './lib/hooks';
+import { useState, useEffect, useRef } from 'react';
+import { useAuth, useVocabulary, useLocale } from './lib/hooks';
 import Auth from './components/Auth';
 import WordBank from './components/WordBank';
 import QuickAdd from './components/QuickAdd';
 import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
 import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
-import { Plus, Play, LogOut, Zap } from 'lucide-react';
+import { Plus, Play, LogOut, Zap, Settings } from 'lucide-react';
 
 // --- Weekly state helpers ---
 const WEEKLY_KEY = 'weekly-challenge';
@@ -52,11 +52,25 @@ function saveWeeklyState(state: WeeklyState) {
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { words, loading: wordsLoading, addWord, checkDuplicate, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord } = useVocabulary();
+  const { locale, setLocale } = useLocale();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showLearn, setShowLearn] = useState(false);
   const [showRevise, setShowRevise] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showSettings) return;
+    const handler = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setShowSettings(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSettings]);
 
   // Weekly state: 'off' | 'select' | 'review'
   const [weeklyView, setWeeklyView] = useState<'off' | 'select' | 'review'>('off');
@@ -172,6 +186,37 @@ function App() {
                 </button>
               )}
 
+              <div className="relative" ref={settingsRef}>
+                <button
+                  onClick={() => setShowSettings(s => !s)}
+                  className="p-2 text-zinc-400 hover:text-zinc-100 transition-colors"
+                  title="Settings"
+                >
+                  <Settings size={20} />
+                </button>
+                {showSettings && (
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl p-4 z-50">
+                    <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">English variant</p>
+                    <div className="flex flex-col gap-1.5">
+                      {(['en-AU', 'en-US'] as const).map(loc => (
+                        <button
+                          key={loc}
+                          onClick={() => { setLocale(loc); setShowSettings(false); }}
+                          className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+                            locale === loc
+                              ? 'bg-zinc-700 text-zinc-100'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50'
+                          }`}
+                        >
+                          <span>{loc === 'en-AU' ? 'Australian / British' : 'American'}</span>
+                          {locale === loc && <span className="text-zinc-400 text-xs">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {user ? (
                 <button onClick={signOut} className="p-2 text-zinc-400 hover:text-zinc-100 transition-colors">
                   <LogOut size={20} />
@@ -231,7 +276,7 @@ function App() {
         />
       )}
 
-      {showQuickAdd && <QuickAdd onClose={() => setShowQuickAdd(false)} addWord={addWord} checkDuplicate={checkDuplicate} />}
+      {showQuickAdd && <QuickAdd onClose={() => setShowQuickAdd(false)} addWord={addWord} checkDuplicate={checkDuplicate} locale={locale} />}
       {showModeSelector && (
         <ReviewModeSelector
           learnCount={learnWords.length}

@@ -10,6 +10,7 @@ interface QuickAddProps {
     wordType?: 'word' | 'phrase' | 'sentence';
   }) => Promise<void>;
   checkDuplicate: (word: string) => Promise<VocabularyWord | null>;
+  locale?: 'en-US' | 'en-AU';
 }
 
 interface DuplicateInfo {
@@ -57,7 +58,7 @@ function parseAttribution(raw: string): ParsedAttribution {
   return { sentence: text };
 }
 
-export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddProps) {
+export default function QuickAdd({ onClose, addWord, checkDuplicate, locale = 'en-AU' }: QuickAddProps) {
   const [mode, setMode] = useState<AddMode>('word');
   const [input, setInput] = useState('');
   const [showMore, setShowMore] = useState(false);
@@ -72,7 +73,7 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate }: QuickAddP
 
   const enrichWord = async (word: string, isPhrase: boolean) => {
     try {
-      const data = await callEdgeFunction<any>('enrich-word', isPhrase ? { word, shortPhraseOnly: true } : { word, defineOnly: true });
+      const data = await callEdgeFunction<any>('enrich-word', isPhrase ? { word, shortPhraseOnly: true, locale } : { word, defineOnly: true, locale });
       return {
         definition: data.definition || undefined,
         examples: data.examples as string[] | undefined,

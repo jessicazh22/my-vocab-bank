@@ -344,7 +344,6 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
                       const wordId = e.dataTransfer.getData('wordId');
                       if (wordId) {
                         await updateWord(wordId, getWordUpdatesForSection(key));
-                        setActiveNavSection(key);
                       }
                     }}
                     className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${

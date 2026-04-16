@@ -14,6 +14,9 @@ interface RequestPayload {
   scaffoldOnly?: boolean;
   defineOnly?: boolean;
   shortPhraseOnly?: boolean;
+  locale?: string; // 'en-AU' | 'en-US'
+  context?: string;
+  previousSentences?: string[];
 }
 
 interface EnrichmentResponse {
@@ -33,7 +36,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { word, definition, sentence, mode, scaffoldOnly, defineOnly, shortPhraseOnly }: RequestPayload = await req.json();
+    const { word, definition, sentence, mode, scaffoldOnly, defineOnly, shortPhraseOnly, locale, context, previousSentences }: RequestPayload = await req.json();
+    const isAustralian = locale === 'en-AU' || locale == null; // default to AU
+    const spellingNote = isAustralian
+      ? `IMPORTANT: Use Australian/British English spelling conventions. Words ending in "-ise", "-our", "-re", "-ogue" (e.g. "commoditised", "organise", "colour", "theatre", "catalogue") are CORRECT spellings — do NOT flag them as misspellings. Only flag something as a misspelling if it is genuinely a typo or an unknown word regardless of variant.`
+      : `IMPORTANT: Use American English spelling conventions. Words ending in "-ize", "-or", "-er", "-og" (e.g. "commoditized", "organize", "color", "theater", "catalog") are CORRECT spellings.`;
 
     // Sentence check mode — verify a user's sentence uses the word correctly
     if (mode === 'checkSentence') {
@@ -99,7 +106,7 @@ Deno.serve(async (req: Request) => {
     if (defineOnly) {
       const definePrompt = `For the word "${word}", provide a short definition and learning content.
 
-IMPORTANT: First check if "${word}" is spelled correctly. If it appears to be a misspelling, identify the most likely intended word.
+${spellingNote}
 
 Return ONLY a JSON object:
 {
@@ -107,13 +114,18 @@ Return ONLY a JSON object:
   "definition": "Very short 3-8 word simple definition in lowercase. Examples: 'concise and packed with meaning' or 'winding in curves or bends'. No full sentences, no 'means that'. Just a simple, direct phrase.",
   "examples": ["example 1", "example 2", "example 3"],
   "context": "Use in [domain/setting] to [purpose]. Works well in [register/tone].",
-  "scaffoldPrompt": "A short personal question (under 25 words) to help the learner use this word."
+  "collocations": { "pairs": [{ "phrase": "...", "note": "..." }], "summary": "..." },
+  "scaffoldPrompt": "A short practice prompt (1-2 sentences, under 35 words)."
 }
 
 Rules:
-- correction: if "${word}" appears misspelled, set to the correct spelling (e.g. "adroit"). If already correct, set to null.
+- correction: apply the spelling convention above. If "${word}" is a genuine typo/unknown word, set to the correct spelling. If it is a valid word in the specified English variant, set to null.
 - definition: 3-8 words, all lowercase, no capitals at start
+- examples: exactly 3 full, properly capitalised sentences ending with a period. Each should show the word used naturally in a distinct context. NOT short fragments — write complete sentences like "Despite the setbacks, she remained sanguine about the outcome."
 - context: exactly 2 sentences. First starts with "Use in..." or similar action verb. Second starts with "Works well in..." or describes the register/tone.
+- collocations.pairs: 4-6 objects. Each has "phrase" (the natural pairing, e.g. "remain sanguine", "cautiously sanguine", "sanguine about the outcome / prospects") and optional "note" (a short phrase — NOT a full sentence — only when it adds real nuance about frequency, register, or a subtle meaning shift; omit note entirely when the pairing is self-evident). Example pairs: [{"phrase":"remain sanguine","note":"the most common pairing; implies holding optimism under pressure"},{"phrase":"cautiously sanguine","note":"hedged optimism, common in business and finance"},{"phrase":"sanguine about the outcome / prospects"}]
+- collocations.summary: 1-2 sentences drawing out the pattern across the set (e.g. which verb forms dominate, what the adverb pairings signal to listeners).
+- scaffoldPrompt: name 2-3 specific domains from the context where this word works naturally, then give a specific invitation. Format: "${word} works best describing [domain1], [domain2], or [domain3]. Can you use it in a sentence about [specific grounded example from everyday life]?" No hypotheticals, no movie references.
 - Return ONLY the JSON object, no other text`;
 
       const defineResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -125,7 +137,7 @@ Rules:
         body: JSON.stringify({
           model: "llama-3.1-8b-instant",
           messages: [{ role: "user", content: definePrompt }],
-          max_tokens: 500,
+          max_tokens: 900,
           temperature: 0.3,
         }),
       });
@@ -153,19 +165,34 @@ Rules:
       });
     }
 
-    const scaffoldStyles = [
-      `Ask about someone the learner knows. Example for "pithy": "Think of someone you know who always gets straight to the point. How would you describe the way they communicate?"`,
-      `Ask the learner to recall a specific memory. Example for "ephemeral": "Think of a moment that felt fleeting but stayed with you. How would you describe it?"`,
-      `Reference a movie, show, or book. Example for "hubris": "Think of a character whose pride led to their downfall. What happened?"`,
-      `Ask about a workplace or school moment. Example for "meticulous": "Think of a time extreme attention to detail really mattered. What was at stake?"`,
-      `Present a simple hypothetical. Example for "serendipitous": "Imagine a wrong turn led to something wonderful. What happened?"`,
-      `Ask about a feeling or sensory experience. Example for "cacophonous": "What's the loudest, most chaotic place you've ever been?"`,
-    ];
+    // Build scaffold prompt instruction based on whether the learner has prior sentences
+    const hasPriorSentences = previousSentences && previousSentences.length > 0;
+    const contextNote = context ? `The word's main contexts: "${context}"` : '';
 
-    const scaffoldInstructions = scaffoldStyles[Math.floor(Math.random() * scaffoldStyles.length)];
+    const scaffoldInstruction = hasPriorSentences
+      ? `The learner is practicing the word "${word}" (meaning: "${definition}").
+${contextNote}
+Their previous practice sentences:
+${previousSentences!.map((s, i) => `${i + 1}. "${s}"`).join('\n')}
+
+Generate a short follow-up prompt (1-2 sentences, under 40 words) that:
+- Briefly notes the context they last tried (without quoting their sentence directly)
+- Guides them toward a different domain from the context they haven't covered yet
+- If they appear to have covered all the main contexts, ask them to write the sentence that would feel most natural coming out of their mouth in real life — no domain constraint
+
+Example formats:
+"Last time you used it for something in nature. Can you use ${word} this time to describe a cultural moment or trend — something in business, media, or technology that felt short-lived?"
+OR (if all contexts seem covered): "You've tried ${word} across its main contexts. Write the sentence that would most naturally come out of your mouth in real life."
+Return ONLY: {"scaffoldPrompt": "..."}`
+      : `Generate a short practice prompt (1-2 sentences, under 35 words) for the word "${word}" (meaning: "${definition}").
+${contextNote}
+Name 2-3 specific domains where this word fits naturally, then give a grounded invitation to use it there.
+Format: "${word} works best describing [domain1], [domain2], or [domain3]. Can you use it in a sentence about [specific everyday example]?"
+No hypotheticals, no movie references, no abstract scenarios.
+Return ONLY: {"scaffoldPrompt": "..."}`;
 
     if (scaffoldOnly) {
-      const scaffoldPrompt = `Generate a short scaffold prompt (1-2 sentences, under 25 words) to help a learner use the word "${word}" (meaning: "${definition}") in a sentence. It should be a simple personal question. No roleplay. Style: ${scaffoldInstructions}. Return ONLY a JSON object: {"scaffoldPrompt": "your prompt here"}`;
+      const scaffoldPrompt = scaffoldInstruction;
 
       const scaffoldResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -204,14 +231,17 @@ Return a JSON object with exactly this structure:
 {
   "examples": ["example 1", "example 2", "example 3"],
   "context": "Use in X, Y, or Z contexts to describe/praise/criticize [specific use]. Works well in [setting].",
-  "scaffoldPrompt": "A reflection prompt to help the learner connect this word to their experience"
+  "collocations": { "pairs": [{ "phrase": "...", "note": "..." }], "summary": "..." },
+  "scaffoldPrompt": "A practice prompt to help the learner use this word"
 }
 
 Guidelines:
 - Provide exactly 3 diverse example sentences that clearly demonstrate the word's meaning
-- Examples should be natural, memorable, and show different contexts
-- Context should be 2 sentences max. First sentence starts with an action verb like "Use in..." explaining WHERE and WHY. Second sentence describes the setting or tone. Example: "Use in business, politics, or creative contexts to praise early recognition of trends or outcomes. Works well in formal writing and professional discussions."
-- scaffoldPrompt MUST be 1-2 short sentences max (under 25 words). It should be a simple personal question that connects the word to the learner's life. No roleplay scenarios. No complex setups. Style: ${scaffoldInstructions}
+- Examples should be natural, memorable, properly capitalised full sentences ending with a period
+- Context should be 2 sentences max. First sentence starts with an action verb like "Use in..." explaining WHERE and WHY. Second sentence describes the setting or tone.
+- collocations.pairs: 4-6 objects with "phrase" (the natural collocation) and optional "note" (short phrase only — omit when self-evident; include when it signals frequency, register, or a subtle shift). Example: [{"phrase":"remain sanguine","note":"the most common pairing; implies holding optimism under pressure"},{"phrase":"cautiously sanguine","note":"hedged optimism, common in business and finance"},{"phrase":"sanguine about the outcome / prospects"}]
+- collocations.summary: 1-2 sentences observing the pattern across the set (e.g. which verb forms dominate, what adverb pairings signal to listeners).
+- scaffoldPrompt: 1-2 sentences, under 35 words. Name 2-3 specific domains from the context where this word works naturally, then give a grounded invitation. Format: "[word] works best describing [domain1], [domain2], or [domain3]. Can you use it in a sentence about [specific everyday example]?" No hypotheticals, no movie references.
 - Return ONLY the JSON object, no other text`;
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -226,7 +256,7 @@ Guidelines:
           { role: "system", content: systemPrompt },
           { role: "user", content: `Word: "${word}"\nDefinition: "${definition}"` },
         ],
-        max_tokens: 400,
+        max_tokens: 700,
         temperature: 0.7,
       }),
     });

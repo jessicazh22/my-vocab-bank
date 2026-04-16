@@ -256,6 +256,7 @@ export function useVocabulary() {
       last_practiced: new Date().toISOString(),
       user_sentences: newUserSentences,
       category: newCategory,
+      scaffold_prompt: null,
     });
   };
 
@@ -290,6 +291,19 @@ export function useVocabulary() {
     bulkImport,
     checkDuplicate,
   };
+}
+
+export function useLocale() {
+  const [locale, setLocaleState] = useState<'en-US' | 'en-AU'>(() => {
+    return (localStorage.getItem('english-locale') as 'en-US' | 'en-AU') || 'en-AU';
+  });
+
+  const setLocale = (loc: 'en-US' | 'en-AU') => {
+    localStorage.setItem('english-locale', loc);
+    setLocaleState(loc);
+  };
+
+  return { locale, setLocale };
 }
 
 export function useWordChat(wordId: string | null) {
