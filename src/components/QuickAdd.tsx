@@ -80,6 +80,7 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate, locale = 'e
         context: data.context as string | undefined,
         scaffoldPrompt: data.scaffoldPrompt as string | undefined,
         correction: data.correction as string | null | undefined,
+        collocations: data.collocations as import('../lib/supabase').CollocationsData | undefined,
       };
     } catch {
       return {};
@@ -134,6 +135,7 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate, locale = 'e
     let aiExamples: string[] | undefined;
     let aiContext: string | undefined;
     let aiScaffold: string | undefined;
+    let aiCollocations: import('../lib/supabase').CollocationsData | undefined;
 
     if (!definition) {
       setAddingStatus('Finding definition...');
@@ -143,6 +145,7 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate, locale = 'e
       aiExamples = enriched.examples;
       aiContext = enriched.context;
       aiScaffold = enriched.scaffoldPrompt;
+      aiCollocations = enriched.collocations;
 
       // Apply spelling correction if the model detected one
       if (enriched.correction && enriched.correction.toLowerCase() !== inputWord.toLowerCase()) {
@@ -166,6 +169,7 @@ export default function QuickAdd({ onClose, addWord, checkDuplicate, locale = 'e
       exampleSentence: finalExample,
       context: aiContext,
       scaffoldPrompt: aiScaffold,
+      collocations: aiCollocations,
       sourceTag: sourceTag || undefined,
       wordType,
     });

@@ -64,6 +64,7 @@ const DB_UPDATE_FIELDS = new Set([
   'source_tag', 'sentence_starters', 'scaffold_prompt', 'category',
   'word_type', 'familiarity', 'practice_count', 'last_practiced',
   'user_sentences', 'added_date', 'is_public', 'is_archived', 'is_conversational',
+  'collocations',
 ]);
 
 function sanitizeUpdates(updates: Partial<VocabularyWord>): Record<string, unknown> {
@@ -159,6 +160,7 @@ export function useVocabulary() {
       sourceTag?: string;
       scaffoldPrompt?: string;
       wordType?: 'word' | 'phrase' | 'sentence';
+      collocations?: import('./supabase').CollocationsData;
     }
   ) => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -176,6 +178,7 @@ export function useVocabulary() {
       usage_hint: options?.usageHint,
       source_tag: options?.sourceTag,
       scaffold_prompt: options?.scaffoldPrompt,
+      collocations: options?.collocations,
       category: 'LEARNING',
       word_type: wordType,
     }).select().single();
