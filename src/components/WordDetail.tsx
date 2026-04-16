@@ -39,6 +39,8 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
   const [scaffoldLoading, setScaffoldLoading] = useState(false);
   const [showCollocations, setShowCollocations] = useState(false);
   const [targetCollocation, setTargetCollocation] = useState<{ phrase: string; note?: string } | null>(null);
+  const [collocationScaffold, setCollocationScaffold] = useState<string | null>(null);
+  const [collocationScaffoldLoading, setCollocationScaffoldLoading] = useState(false);
 
   useEffect(() => {
     setLocalWord(word);
@@ -124,12 +126,26 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     }
   };
 
-  const handleStartLearningWithCollocation = (item: { phrase: string; note?: string }) => {
+  const handleStartLearningWithCollocation = async (item: { phrase: string; note?: string }) => {
     setTargetCollocation(item);
+    setCollocationScaffold(null);
     setLearningMode(true);
-    setShowCard(false); // skip straight to practice side
+    setShowCard(false);
     setFeedback(null);
     setUserSentence('');
+
+    setCollocationScaffoldLoading(true);
+    try {
+      const data = await callEdgeFunction<any>('enrich-word', {
+        word: localWord.word,
+        definition: localWord.definition,
+        context: localWord.context,
+        scaffoldOnly: true,
+        targetCollocation: item,
+      });
+      if (data.scaffoldPrompt) setCollocationScaffold(data.scaffoldPrompt);
+    } catch { /* fail silently — falls back to static template */ }
+    finally { setCollocationScaffoldLoading(false); }
   };
 
   const handleExitLearning = () => {
@@ -137,6 +153,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     setShowCard(false);
     setFeedback(null);
     setTargetCollocation(null);
+    setCollocationScaffold(null);
   };
 
   const handlePractice = async () => {
@@ -324,10 +341,16 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
 
                       {targetCollocation ? (
                         <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg">
-                          <p className="text-amber-200/80 text-sm leading-relaxed">
-                            Try using <span className="font-medium text-amber-300">'{targetCollocation.phrase}'</span> in a sentence
-                            {targetCollocation.note ? ` — ${targetCollocation.note}.` : '.'}
-                          </p>
+                          {collocationScaffoldLoading ? (
+                            <div className="flex items-center gap-2">
+                              <Loader2 size={14} className="animate-spin text-amber-400" />
+                              <p className="text-amber-200/60 text-sm">Generating a prompt...</p>
+                            </div>
+                          ) : (
+                            <p className="text-amber-200/80 text-sm leading-relaxed">
+                              {collocationScaffold ?? `Try using '${targetCollocation.phrase}' in a sentence${targetCollocation.note ? ` — ${targetCollocation.note}` : ''}.`}
+                            </p>
+                          )}
                         </div>
                       ) : scaffoldLoading ? (
                         <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg flex items-center gap-2">

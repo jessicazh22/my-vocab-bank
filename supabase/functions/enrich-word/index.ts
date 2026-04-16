@@ -17,6 +17,7 @@ interface RequestPayload {
   locale?: string; // 'en-AU' | 'en-US'
   context?: string;
   previousSentences?: string[];
+  targetCollocation?: { phrase: string; note?: string };
 }
 
 interface EnrichmentResponse {
@@ -36,7 +37,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { word, definition, sentence, mode, scaffoldOnly, defineOnly, shortPhraseOnly, locale, context, previousSentences }: RequestPayload = await req.json();
+    const { word, definition, sentence, mode, scaffoldOnly, defineOnly, shortPhraseOnly, locale, context, previousSentences, targetCollocation }: RequestPayload = await req.json();
     const isAustralian = locale === 'en-AU' || locale == null; // default to AU
     const spellingNote = isAustralian
       ? `IMPORTANT: Use Australian/British English spelling conventions. Words ending in "-ise", "-our", "-re", "-ogue" (e.g. "commoditised", "organise", "colour", "theatre", "catalogue") are CORRECT spellings — do NOT flag them as misspellings. Only flag something as a misspelling if it is genuinely a typo or an unknown word regardless of variant.`
@@ -190,6 +191,43 @@ Name 2-3 specific domains where this word fits naturally, then give a grounded i
 Format: "${word} works best describing [domain1], [domain2], or [domain3]. Can you use it in a sentence about [specific everyday example]?"
 No hypotheticals, no movie references, no abstract scenarios.
 Return ONLY: {"scaffoldPrompt": "..."}`;
+
+    if (scaffoldOnly && targetCollocation) {
+      const collocationPrompt = `Generate a short practice prompt (2-3 sentences, under 50 words) for a learner who wants to practice the word "${word}" using specifically the pairing "${targetCollocation.phrase}".
+${targetCollocation.note ? `About this pairing: ${targetCollocation.note}.` : ''}
+${context ? `The word's broader contexts: "${context}"` : ''}
+
+The prompt should:
+1. Briefly explain what makes this specific pairing natural or distinct — don't just repeat the note, expand how it sounds in real use
+2. Give a specific, grounded invitation to write a sentence using exactly that pairing
+
+Example for "remain sanguine" with note "implies holding optimism under pressure":
+"'Remain sanguine' is the most natural form — it implies actively holding your optimism despite real pressure. Can you write a sentence where someone (or you) remained sanguine in a genuinely difficult moment?"
+
+Return ONLY: {"scaffoldPrompt": "..."}`;
+
+      const collocationResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "user", content: collocationPrompt }],
+          max_tokens: 150,
+          temperature: 0.7,
+        }),
+      });
+      const collocationData = await collocationResponse.json();
+      const collocationContent = collocationData.choices?.[0]?.message?.content || "";
+      try {
+        const jsonMatch = collocationContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return new Response(JSON.stringify(parsed), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch { /* fall through to regular scaffold */ }
+    }
 
     if (scaffoldOnly) {
       const scaffoldPrompt = scaffoldInstruction;
