@@ -38,6 +38,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
   const [previousEnrichment, setPreviousEnrichment] = useState<PreviousEnrichment | null>(null);
   const [scaffoldLoading, setScaffoldLoading] = useState(false);
   const [showCollocations, setShowCollocations] = useState(false);
+  const [targetCollocation, setTargetCollocation] = useState<{ phrase: string; note?: string } | null>(null);
 
   useEffect(() => {
     setLocalWord(word);
@@ -75,6 +76,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
   };
 
   const handleStartLearning = async () => {
+    setTargetCollocation(null);
     setLearningMode(true);
     setShowCard(false);
     setFeedback(null);
@@ -122,10 +124,19 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     }
   };
 
+  const handleStartLearningWithCollocation = (item: { phrase: string; note?: string }) => {
+    setTargetCollocation(item);
+    setLearningMode(true);
+    setShowCard(false); // skip straight to practice side
+    setFeedback(null);
+    setUserSentence('');
+  };
+
   const handleExitLearning = () => {
     setLearningMode(false);
     setShowCard(false);
     setFeedback(null);
+    setTargetCollocation(null);
   };
 
   const handlePractice = async () => {
@@ -311,7 +322,14 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                         </div>
                       )}
 
-                      {scaffoldLoading ? (
+                      {targetCollocation ? (
+                        <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg">
+                          <p className="text-amber-200/80 text-sm leading-relaxed">
+                            Try using <span className="font-medium text-amber-300">'{targetCollocation.phrase}'</span> in a sentence
+                            {targetCollocation.note ? ` — ${targetCollocation.note}.` : '.'}
+                          </p>
+                        </div>
+                      ) : scaffoldLoading ? (
                         <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg flex items-center gap-2">
                           <Loader2 size={14} className="animate-spin text-amber-400" />
                           <p className="text-amber-200/60 text-sm">Generating a prompt to help you...</p>
@@ -325,7 +343,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                       <textarea
                         value={userSentence}
                         onChange={(e) => setUserSentence(e.target.value)}
-                        placeholder="Write your sentence..."
+                        placeholder={targetCollocation ? `${targetCollocation.phrase}...` : 'Write your sentence...'}
                         rows={3}
                         className="w-full px-4 py-3 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-amber-600/50 resize-none text-sm"
                         autoFocus
@@ -548,9 +566,15 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                 {showCollocations && (
                   <div className="mt-3 space-y-2">
                     {localWord.collocations.pairs.map((item, i) => (
-                      <div key={i} className="text-sm">
-                        <span className="text-zinc-300">{item.phrase}</span>
-                        {item.note && <span className="text-zinc-500"> — {item.note}</span>}
+                      <div key={i} className="text-sm group/pair flex items-start gap-2">
+                        <button
+                          onClick={() => handleStartLearningWithCollocation(item)}
+                          className="text-left"
+                          title={`Practice using '${item.phrase}'`}
+                        >
+                          <span className="text-zinc-300 group-hover/pair:text-amber-300 transition-colors underline underline-offset-2 decoration-zinc-700 group-hover/pair:decoration-amber-600/50">{item.phrase}</span>
+                          {item.note && <span className="text-zinc-500 no-underline"> — {item.note}</span>}
+                        </button>
                       </div>
                     ))}
                     {localWord.collocations.summary && (
