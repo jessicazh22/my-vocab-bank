@@ -206,7 +206,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
         word: localWord.word,
         definition: localWord.definition,
       });
-      if (data.examples && data.context) {
+      if (data.examples) {
         const maxAi = userOriginal ? 2 : 3;
         const aiExamples = data.examples.slice(0, maxAi).join(' / ');
         const exampleSentence = userOriginal
@@ -214,15 +214,12 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
           : aiExamples;
         const updates: Partial<VocabularyWord> = {
           example_sentence: exampleSentence,
-          context: data.context,
-          ...(data.scaffoldPrompt && { scaffold_prompt: data.scaffoldPrompt }),
+          // context intentionally not updated — user triggered examples-only regeneration
         };
         await updateWord(word.id, updates);
         setLocalWord(prev => ({
           ...prev,
           example_sentence: exampleSentence,
-          context: data.context,
-          scaffold_prompt: data.scaffoldPrompt || prev.scaffold_prompt,
         }));
         onWordUpdate?.();
       }
