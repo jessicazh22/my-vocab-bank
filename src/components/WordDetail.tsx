@@ -306,7 +306,10 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                     <div>
                       <div className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Examples</div>
                       <ul className="space-y-2">
-                        {localWord.example_sentence.split(' / ').map((example, i) => {
+                        {localWord.example_sentence.split(' / ').filter(example => {
+                          const clean = example.trim().replace('[yours] ', '').toLowerCase();
+                          return clean && !clean.startsWith('unable to');
+                        }).map((example, i) => {
                           const isYours = example.trim().startsWith('[yours] ');
                           const text = isYours ? example.trim().replace('[yours] ', '') : example.trim();
                           return (
@@ -549,7 +552,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                   >
                     {distinctionRegenerating
                       ? <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> checking...</span>
-                      : 'how does it differ?'}
+                      : 'How does it differ?'}
                   </button>
                 )}
               </>
@@ -592,7 +595,10 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
               </div>
             ) : localWord.example_sentence ? (
               <ul className="space-y-2">
-                {localWord.example_sentence.split(' / ').map((example, i) => {
+                {localWord.example_sentence.split(' / ').filter(example => {
+                  const clean = example.trim().replace('[yours] ', '').toLowerCase();
+                  return clean && !clean.startsWith('unable to');
+                }).map((example, i) => {
                   const isYours = example.trim().startsWith('[yours] ');
                   const text = isYours ? example.trim().replace('[yours] ', '') : example.trim();
                   return (
