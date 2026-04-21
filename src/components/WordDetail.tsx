@@ -47,6 +47,24 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     setLocalWord(word);
   }, [word]);
 
+  // Auto-clean any stored "Unable to generate examples." error strings from example_sentence
+  useEffect(() => {
+    if (!localWord.example_sentence) return;
+    if (!localWord.example_sentence.includes('Unable to generate')) return;
+    const cleaned = localWord.example_sentence
+      .split(' / ')
+      .filter(e => {
+        const clean = e.trim().replace('[yours] ', '').toLowerCase();
+        return clean && !clean.startsWith('unable to');
+      })
+      .join(' / ');
+    if (cleaned !== localWord.example_sentence) {
+      updateWord(localWord.id, { example_sentence: cleaned || undefined });
+      setLocalWord(prev => ({ ...prev, example_sentence: cleaned || undefined }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localWord.id]);
+
   // Silently generate collocations for existing words that don't have them yet
   // Distinction is on-demand only (user clicks "how does it differ?")
   useEffect(() => {
