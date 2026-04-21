@@ -1,0 +1,1 @@
+ALTER TABLE vocabulary ADD COLUMN IF NOT EXISTS distinction TEXT;

@@ -41,27 +41,56 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
   const [targetCollocation, setTargetCollocation] = useState<{ phrase: string; note?: string } | null>(null);
   const [collocationScaffold, setCollocationScaffold] = useState<string | null>(null);
   const [collocationScaffoldLoading, setCollocationScaffoldLoading] = useState(false);
+  const [distinctionRegenerating, setDistinctionRegenerating] = useState(false);
 
   useEffect(() => {
     setLocalWord(word);
   }, [word]);
 
-  // Silently generate collocations for existing words that don't have them yet
+  // Silently generate collocations and/or distinction for existing words that don't have them yet
   useEffect(() => {
-    if (localWord.collocations || localWord.word_type === 'sentence' || !localWord.definition) return;
+    // Collocations only make sense for single words; distinction for words and phrases
+    const missingCollocations = !localWord.collocations && localWord.word_type === 'word';
+    // null/undefined = not yet fetched; '' = fetched but no distinction applies; string = has one
+    // == null catches both null and undefined; '' == null is false so sentinel works
+    const missingDistinction = localWord.distinction == null && localWord.word_type !== 'sentence';
+    if (!localWord.definition) return;
+    if (!missingCollocations && !missingDistinction) return;
+
     const generate = async () => {
       try {
-        const data = await callEdgeFunction<any>('enrich-word', {
-          word: localWord.word,
-          definition: localWord.definition,
-          defineOnly: true,
-        });
-        if (data.collocations?.pairs?.length) {
-          await updateWord(localWord.id, { collocations: data.collocations });
-          setLocalWord(prev => ({ ...prev, collocations: data.collocations }));
+        const updates: Partial<VocabularyWord> = {};
+
+        // If only distinction is missing, use the lighter distinctionOnly call
+        // to avoid defineOnly's large JSON being truncated before distinction is written
+        if (missingDistinction && !missingCollocations) {
+          const distData = await callEdgeFunction<any>('enrich-word', {
+            word: localWord.word,
+            definition: localWord.definition,
+            distinctionOnly: true,
+          });
+          updates.distinction = distData.distinction || '';
+        } else {
+          // Need collocations (and possibly distinction too) — use defineOnly
+          const data = await callEdgeFunction<any>('enrich-word', {
+            word: localWord.word,
+            definition: localWord.definition,
+            defineOnly: true,
+          });
+          if (missingCollocations && data.collocations?.pairs?.length) {
+            updates.collocations = data.collocations;
+          }
+          if (missingDistinction) {
+            updates.distinction = data.distinction || '';
+          }
+        }
+
+        if (Object.keys(updates).length) {
+          await updateWord(localWord.id, updates);
+          setLocalWord(prev => ({ ...prev, ...updates }));
         }
       } catch {
-        // fail silently — collocations are a nice-to-have
+        // fail silently — these are nice-to-haves
       }
     };
     generate();
@@ -154,6 +183,24 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     setFeedback(null);
     setTargetCollocation(null);
     setCollocationScaffold(null);
+  };
+
+  const handleRegenerateDistinction = async () => {
+    setDistinctionRegenerating(true);
+    try {
+      const data = await callEdgeFunction<any>('enrich-word', {
+        word: localWord.word,
+        definition: localWord.definition,
+        distinctionOnly: true,
+      });
+      const newDistinction = data.distinction || undefined;
+      await updateWord(localWord.id, { distinction: newDistinction });
+      setLocalWord(prev => ({ ...prev, distinction: newDistinction }));
+    } catch {
+      // fail silently
+    } finally {
+      setDistinctionRegenerating(false);
+    }
   };
 
   const handlePractice = async () => {
@@ -498,7 +545,27 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                 </div>
               </div>
             ) : (
-              <p className="text-zinc-300 leading-relaxed">{localWord.definition}</p>
+              <>
+                <p className="text-zinc-300 leading-relaxed">{localWord.definition}</p>
+                {console.log('distinction debug:', localWord.word, localWord.distinction, typeof localWord.distinction)}
+                {localWord.distinction && (
+                  <div className="group flex items-start gap-1.5 mt-2">
+                    <p className="text-zinc-600 text-xs leading-relaxed italic flex-1">
+                      {localWord.distinction}
+                    </p>
+                    {!isReadOnly && (
+                      <button
+                        onClick={handleRegenerateDistinction}
+                        disabled={distinctionRegenerating}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-700 hover:text-zinc-400 mt-0.5 shrink-0 disabled:opacity-50"
+                        title="Regenerate distinction note"
+                      >
+                        {distinctionRegenerating ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -575,7 +642,14 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
             ) : !localWord.example_sentence ? null : (
               <p className="text-zinc-600 text-sm italic">No context available</p>
             )}
-            {localWord.collocations && localWord.collocations.pairs.length > 0 && (
+            {localWord.word_type === 'word' && localWord.collocations && (() => {
+              // Only show pairs that genuinely contain the word itself
+              const wordLower = localWord.word.toLowerCase();
+              const validPairs = localWord.collocations.pairs.filter(p =>
+                p.phrase.toLowerCase().includes(wordLower)
+              );
+              if (validPairs.length === 0) return null;
+              return (
               <div className="mt-3">
                 <button
                   onClick={() => setShowCollocations(s => !s)}
@@ -585,7 +659,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                 </button>
                 {showCollocations && (
                   <div className="mt-3 space-y-2">
-                    {localWord.collocations.pairs.map((item, i) => (
+                    {validPairs.map((item, i) => (
                       <div key={i} className="text-sm group/pair flex items-start gap-2">
                         <button
                           onClick={() => handleStartLearningWithCollocation(item)}
@@ -605,7 +679,8 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
           </div>
 
           {localWord.user_sentences.length > 0 && (

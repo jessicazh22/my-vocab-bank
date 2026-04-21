@@ -18,6 +18,7 @@ interface RequestPayload {
   context?: string;
   previousSentences?: string[];
   targetCollocation?: { phrase: string; note?: string };
+  distinctionOnly?: boolean;
 }
 
 interface EnrichmentResponse {
@@ -37,7 +38,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { word, definition, sentence, mode, scaffoldOnly, defineOnly, shortPhraseOnly, locale, context, previousSentences, targetCollocation }: RequestPayload = await req.json();
+    const { word, definition, sentence, mode, scaffoldOnly, defineOnly, shortPhraseOnly, locale, context, previousSentences, targetCollocation, distinctionOnly }: RequestPayload = await req.json();
     const isAustralian = locale === 'en-AU' || locale == null; // default to AU
     const spellingNote = isAustralian
       ? `IMPORTANT: Use Australian/British English spelling conventions. Words ending in "-ise", "-our", "-re", "-ogue" (e.g. "commoditised", "organise", "colour", "theatre", "catalogue") are CORRECT spellings — do NOT flag them as misspellings. Only flag something as a misspelling if it is genuinely a typo or an unknown word regardless of variant.`
@@ -103,6 +104,42 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Distinction-only mode — regenerate just the distinction note for a word
+    if (distinctionOnly) {
+      const distinctionPrompt = `For the word/phrase "${word}"${definition ? ` (meaning: "${definition}")` : ''}, generate a distinction note if applicable.
+
+A distinction note explains how this word differs from 1-2 near-synonyms a learner would plausibly confuse it with. Explain the key practical difference precisely — what does this word do that the synonym doesn't? Format is flexible: use whatever phrasing makes the difference clearest. Where the distinction is abstract, ground it with a brief example in parentheses. Examples: "commoditise specifically implies losing premium/differentiation; standardise is neutral." or "Taciturn is dispositional — habitually quiet by nature. Reticent is situational — reluctant to speak about something specific." or "Fleeting = you barely caught it (a fleeting glance). Ephemeral = it was made to fade (ephemeral street art, ephemeral trends)."
+
+Set to null for words with no meaningful confusable near-synonym.
+
+Return ONLY a JSON object: {"distinction": "your note here"} or {"distinction": null}`;
+
+      const distResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "user", content: distinctionPrompt }],
+          max_tokens: 150,
+          temperature: 0.3,
+        }),
+      });
+      const distData = await distResponse.json();
+      const distContent = distData.choices?.[0]?.message?.content || "";
+      try {
+        const jsonMatch = distContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return new Response(JSON.stringify({ distinction: parsed.distinction ?? null }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch { /* fall through */ }
+      return new Response(JSON.stringify({ distinction: null }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Quick define mode — short definition + examples + context for a word with no definition
     if (defineOnly) {
       const definePrompt = `For the word "${word}", provide a short definition and learning content.
@@ -116,6 +153,7 @@ Return ONLY a JSON object:
   "examples": ["example 1", "example 2", "example 3"],
   "context": "Use in [domain/setting] to [purpose]. Works well in [register/tone].",
   "collocations": { "pairs": [{ "phrase": "...", "note": "..." }], "summary": "..." },
+  "distinction": "1-2 sentences explaining how this word differs from its near-synonyms, or null",
   "scaffoldPrompt": "A short practice prompt (1-2 sentences, under 35 words)."
 }
 
@@ -124,8 +162,9 @@ Rules:
 - definition: 3-8 words, all lowercase, no capitals at start
 - examples: exactly 3 full, properly capitalised sentences ending with a period. Each should show the word used naturally in a distinct context. NOT short fragments — write complete sentences like "Despite the setbacks, she remained sanguine about the outcome."
 - context: exactly 2 sentences. First starts with "Use in..." or similar action verb. Second starts with "Works well in..." or describes the register/tone.
-- collocations.pairs: 4-6 objects. Each has "phrase" (the natural pairing, e.g. "remain sanguine", "cautiously sanguine", "sanguine about the outcome / prospects") and optional "note" (a short phrase — NOT a full sentence — only when it adds real nuance about frequency, register, or a subtle meaning shift; omit note entirely when the pairing is self-evident). Example pairs: [{"phrase":"remain sanguine","note":"the most common pairing; implies holding optimism under pressure"},{"phrase":"cautiously sanguine","note":"hedged optimism, common in business and finance"},{"phrase":"sanguine about the outcome / prospects"}]
+- collocations.pairs: 4-6 objects showing how "${word}" naturally combines with other words. CRITICAL: every "phrase" must contain the word "${word}" itself — no thematic descriptions or associations. Each object has "phrase" (e.g. "remain sanguine", "cautiously sanguine", "sanguine about the outcome / prospects") and optional "note" (a short phrase — NOT a full sentence — only when it adds real nuance about frequency, register, or a subtle meaning shift; omit note entirely when self-evident). Example pairs for "sanguine": [{"phrase":"remain sanguine","note":"the most common pairing; implies holding optimism under pressure"},{"phrase":"cautiously sanguine","note":"hedged optimism, common in business and finance"},{"phrase":"sanguine about the outcome / prospects"}]
 - collocations.summary: 1-2 sentences drawing out the pattern across the set (e.g. which verb forms dominate, what the adverb pairings signal to listeners).
+- distinction: only include if this word has 1-2 near-synonyms a learner would plausibly confuse it with. Explain the key practical difference precisely — what does this word do that the synonym doesn't? Format is flexible: use whatever phrasing makes the difference clearest. Where the distinction is abstract, ground it with a brief example in parentheses. Examples: "commoditise specifically implies losing premium/differentiation; standardise is neutral." or "Taciturn is dispositional — habitually quiet by nature. Reticent is situational — reluctant to speak about something specific." or "Fleeting = you barely caught it (a fleeting glance). Ephemeral = it was made to fade (ephemeral street art, ephemeral trends)." Set to null for words with no meaningful confusable near-synonym.
 - scaffoldPrompt: name 2-3 specific domains from the context where this word works naturally, then give a specific invitation. Format: "${word} works best describing [domain1], [domain2], or [domain3]. Can you use it in a sentence about [specific grounded example from everyday life]?" No hypotheticals, no movie references.
 - Return ONLY the JSON object, no other text`;
 
@@ -138,7 +177,7 @@ Rules:
         body: JSON.stringify({
           model: "llama-3.1-8b-instant",
           messages: [{ role: "user", content: definePrompt }],
-          max_tokens: 900,
+          max_tokens: 1200,
           temperature: 0.3,
         }),
       });
@@ -270,6 +309,7 @@ Return a JSON object with exactly this structure:
   "examples": ["example 1", "example 2", "example 3"],
   "context": "Use in X, Y, or Z contexts to describe/praise/criticize [specific use]. Works well in [setting].",
   "collocations": { "pairs": [{ "phrase": "...", "note": "..." }], "summary": "..." },
+  "distinction": "1-2 sentences explaining how this word differs from its near-synonyms, or null",
   "scaffoldPrompt": "A practice prompt to help the learner use this word"
 }
 
@@ -277,8 +317,9 @@ Guidelines:
 - Provide exactly 3 diverse example sentences that clearly demonstrate the word's meaning
 - Examples should be natural, memorable, properly capitalised full sentences ending with a period
 - Context should be 2 sentences max. First sentence starts with an action verb like "Use in..." explaining WHERE and WHY. Second sentence describes the setting or tone.
-- collocations.pairs: 4-6 objects with "phrase" (the natural collocation) and optional "note" (short phrase only — omit when self-evident; include when it signals frequency, register, or a subtle shift). Example: [{"phrase":"remain sanguine","note":"the most common pairing; implies holding optimism under pressure"},{"phrase":"cautiously sanguine","note":"hedged optimism, common in business and finance"},{"phrase":"sanguine about the outcome / prospects"}]
+- collocations.pairs: 4-6 objects showing how the word naturally combines with other words. CRITICAL: every "phrase" must contain the word itself — no thematic descriptions or associations. Each has "phrase" (the natural collocation, e.g. "remain sanguine", "cautiously sanguine", "sanguine about the outcome / prospects") and optional "note" (short phrase only — omit when self-evident; include when it signals frequency, register, or a subtle shift). Example: [{"phrase":"remain sanguine","note":"the most common pairing; implies holding optimism under pressure"},{"phrase":"cautiously sanguine","note":"hedged optimism, common in business and finance"},{"phrase":"sanguine about the outcome / prospects"}]
 - collocations.summary: 1-2 sentences observing the pattern across the set (e.g. which verb forms dominate, what adverb pairings signal to listeners).
+- distinction: only include if this word has 1-2 near-synonyms a learner would plausibly confuse it with. Explain the key practical difference precisely — what does this word do that the synonym doesn't? Format is flexible: use whatever phrasing makes the difference clearest. Where the distinction is abstract, ground it with a brief example in parentheses. Examples: "commoditise specifically implies losing premium/differentiation; standardise is neutral." or "Taciturn is dispositional — habitually quiet by nature. Reticent is situational — reluctant to speak about something specific." or "Fleeting = you barely caught it (a fleeting glance). Ephemeral = it was made to fade (ephemeral street art, ephemeral trends)." Set to null for words with no meaningful confusable near-synonym.
 - scaffoldPrompt: 1-2 sentences, under 35 words. Name 2-3 specific domains from the context where this word works naturally, then give a grounded invitation. Format: "[word] works best describing [domain1], [domain2], or [domain3]. Can you use it in a sentence about [specific everyday example]?" No hypotheticals, no movie references.
 - Return ONLY the JSON object, no other text`;
 

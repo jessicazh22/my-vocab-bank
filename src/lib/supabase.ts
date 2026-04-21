@@ -40,6 +40,7 @@ export type VocabularyWord = {
   is_public: boolean;
   is_archived: boolean;
   collocations?: CollocationsData;
+  distinction?: string;
   created_at: string;
   updated_at: string;
 };

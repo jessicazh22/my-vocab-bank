@@ -65,6 +65,7 @@ const DB_UPDATE_FIELDS = new Set([
   'word_type', 'familiarity', 'practice_count', 'last_practiced',
   'user_sentences', 'added_date', 'is_public', 'is_archived', 'is_conversational',
   'collocations',
+  'distinction',
 ]);
 
 function sanitizeUpdates(updates: Partial<VocabularyWord>): Record<string, unknown> {
@@ -89,7 +90,7 @@ export function useVocabulary() {
   const fetchWords = async () => {
     const { data, error } = await supabase
       .from('vocabulary')
-      .select('*')
+      .select('*, distinction, collocations')
       .order('added_date', { ascending: false });
 
     if (!error && data) {
@@ -161,6 +162,7 @@ export function useVocabulary() {
       scaffoldPrompt?: string;
       wordType?: 'word' | 'phrase' | 'sentence';
       collocations?: import('./supabase').CollocationsData;
+      distinction?: string;
     }
   ) => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -179,6 +181,7 @@ export function useVocabulary() {
       source_tag: options?.sourceTag,
       scaffold_prompt: options?.scaffoldPrompt,
       collocations: options?.collocations,
+      distinction: options?.distinction,
       category: 'LEARNING',
       word_type: wordType,
     }).select().single();
