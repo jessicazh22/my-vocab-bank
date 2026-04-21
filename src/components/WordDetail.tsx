@@ -47,50 +47,28 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     setLocalWord(word);
   }, [word]);
 
-  // Silently generate collocations and/or distinction for existing words that don't have them yet
+  // Silently generate collocations for existing words that don't have them yet
+  // Distinction is on-demand only (user clicks "how does it differ?")
   useEffect(() => {
-    // Collocations only make sense for single words; distinction for words and phrases
     const missingCollocations = !localWord.collocations && localWord.word_type === 'word';
-    // null/undefined = not yet fetched; '' = fetched but no distinction applies; string = has one
-    // == null catches both null and undefined; '' == null is false so sentinel works
-    const missingDistinction = localWord.distinction == null && localWord.word_type !== 'sentence';
-    if (!localWord.definition) return;
-    if (!missingCollocations && !missingDistinction) return;
+    if (!localWord.definition || !missingCollocations) return;
 
     const generate = async () => {
       try {
+        const data = await callEdgeFunction<any>('enrich-word', {
+          word: localWord.word,
+          definition: localWord.definition,
+          defineOnly: true,
+        });
         const updates: Partial<VocabularyWord> = {};
-
-        // If only distinction is missing, use the lighter distinctionOnly call
-        // to avoid defineOnly's large JSON being truncated before distinction is written
-        if (missingDistinction && !missingCollocations) {
-          const distData = await callEdgeFunction<any>('enrich-word', {
-            word: localWord.word,
-            definition: localWord.definition,
-            distinctionOnly: true,
-          });
-          updates.distinction = distData.distinction || '';
-        } else {
-          // Need collocations (and possibly distinction too) — use defineOnly
-          const data = await callEdgeFunction<any>('enrich-word', {
-            word: localWord.word,
-            definition: localWord.definition,
-            defineOnly: true,
-          });
-          if (missingCollocations && data.collocations?.pairs?.length) {
-            updates.collocations = data.collocations;
-          }
-          if (missingDistinction) {
-            updates.distinction = data.distinction || '';
-          }
-        }
-
+        if (data.collocations?.pairs?.length) updates.collocations = data.collocations;
+        if (data.distinction) updates.distinction = data.distinction;
         if (Object.keys(updates).length) {
           await updateWord(localWord.id, updates);
           setLocalWord(prev => ({ ...prev, ...updates }));
         }
       } catch {
-        // fail silently — these are nice-to-haves
+        // fail silently
       }
     };
     generate();
@@ -547,8 +525,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
             ) : (
               <>
                 <p className="text-zinc-300 leading-relaxed">{localWord.definition}</p>
-                {console.log('distinction debug:', localWord.word, localWord.distinction, typeof localWord.distinction)}
-                {localWord.distinction && (
+                {localWord.distinction ? (
                   <div className="group flex items-start gap-1.5 mt-2">
                     <p className="text-zinc-600 text-xs leading-relaxed italic flex-1">
                       {localWord.distinction}
@@ -564,6 +541,16 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                       </button>
                     )}
                   </div>
+                ) : !isReadOnly && localWord.word_type !== 'sentence' && localWord.definition && (
+                  <button
+                    onClick={handleRegenerateDistinction}
+                    disabled={distinctionRegenerating}
+                    className="text-zinc-700 hover:text-zinc-500 text-xs mt-1.5 transition-colors disabled:opacity-50"
+                  >
+                    {distinctionRegenerating
+                      ? <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> checking...</span>
+                      : 'how does it differ?'}
+                  </button>
                 )}
               </>
             )}
