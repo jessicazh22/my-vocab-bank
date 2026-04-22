@@ -131,8 +131,15 @@ export function useVocabulary() {
       })
       .subscribe();
 
+    // Re-fetch when auth state changes (login/logout) so RLS-filtered
+    // words update immediately without requiring a manual refresh
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(() => {
+      fetchWords();
+    });
+
     return () => {
       supabase.removeChannel(channel);
+      authSubscription.unsubscribe();
     };
   }, []);
 
