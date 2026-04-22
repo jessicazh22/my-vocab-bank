@@ -92,6 +92,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
   const activeWords = getWordsForSection(activeNavSection);
 
   const [dragOverSection, setDragOverSection] = useState<NavSection | null>(null);
+  const [dragOverArchive, setDragOverArchive] = useState(false);
 
   const handleDragStart = (e: React.DragEvent, wordId: string) => {
     e.dataTransfer.setData('wordId', wordId);
@@ -358,15 +359,32 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
               </div>
             )}
 
-            {/* Archive link */}
-            {archived.length > 0 && (
+            {/* Archive link — always visible when not readonly; acts as a drag drop target */}
+            {!isReadOnly ? (
+              <button
+                onClick={() => setActiveSection('archive')}
+                onDragOver={(e) => { handleDragOver(e); setDragOverArchive(true); }}
+                onDragLeave={() => setDragOverArchive(false)}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  setDragOverArchive(false);
+                  const wordId = e.dataTransfer.getData('wordId');
+                  if (wordId) await archiveWord(wordId);
+                }}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all mt-4 ${
+                  activeSection === 'archive' ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-500'
+                } ${dragOverArchive ? 'ring-2 ring-red-500/30 bg-zinc-800/60 text-zinc-500' : ''}`}
+              >
+                archive{archived.length > 0 && ` (${archived.length})`}
+              </button>
+            ) : archived.length > 0 && (
               <button
                 onClick={() => setActiveSection('archive')}
                 className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors mt-4 ${
                   activeSection === 'archive' ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-500'
                 }`}
               >
-                archive
+                archive ({archived.length})
               </button>
             )}
           </nav>

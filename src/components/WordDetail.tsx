@@ -4,6 +4,21 @@ import { VocabularyWord, callEdgeFunction } from '../lib/supabase';
 import { getTagColor } from '../lib/utils';
 import ChatPanel from './ChatPanel';
 
+function extractSynonym(distinction: string, word: string): string | null {
+  // "whereas [synonym]" or "unlike [synonym]"
+  const contrastMatch = distinction.match(/(?:whereas|unlike)\s+([a-zA-Z-]+)/i);
+  if (contrastMatch) return contrastMatch[1];
+  // "; [synonym] is" or "; [synonym]" — after semicolon
+  const semicolonMatch = distinction.match(/;\s*([a-zA-Z-]+)/i);
+  if (semicolonMatch && semicolonMatch[1].toLowerCase() !== word.toLowerCase()) return semicolonMatch[1];
+  // Capitalised word before " is " or " ="
+  const isMatches = [...distinction.matchAll(/([A-Z][a-z-]+)(?:\s+is\s+|\s*=\s*)/g)];
+  for (const m of isMatches) {
+    if (m[1].toLowerCase() !== word.toLowerCase()) return m[1];
+  }
+  return null;
+}
+
 interface WordDetailProps {
   word: VocabularyWord;
   onClose: () => void;
@@ -548,9 +563,16 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                 <p className="text-zinc-300 leading-relaxed">{localWord.definition}</p>
                 {localWord.distinction ? (
                   <div className="group flex items-start gap-1.5 mt-2">
-                    <p className="text-zinc-600 text-xs leading-relaxed italic flex-1">
-                      {localWord.distinction}
-                    </p>
+                    <div className="flex-1">
+                      {extractSynonym(localWord.distinction, localWord.word) && (
+                        <span className="text-zinc-700 text-[10px] uppercase tracking-wide mr-1.5">
+                          vs. {extractSynonym(localWord.distinction, localWord.word)}
+                        </span>
+                      )}
+                      <p className="text-zinc-600 text-xs leading-relaxed italic inline">
+                        {localWord.distinction}
+                      </p>
+                    </div>
                     {!isReadOnly && (
                       <button
                         onClick={handleRegenerateDistinction}
@@ -562,7 +584,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                       </button>
                     )}
                   </div>
-                ) : !isReadOnly && localWord.word_type !== 'sentence' && localWord.definition && (
+                ) : !isReadOnly && localWord.word_type === 'word' && localWord.definition && (
                   <button
                     onClick={handleRegenerateDistinction}
                     disabled={distinctionRegenerating}
