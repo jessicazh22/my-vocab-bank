@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { VocabularyWord } from '../lib/supabase';
 import { getTagColor } from '../lib/utils';
 import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive } from 'lucide-react';
@@ -29,10 +29,10 @@ interface ContextMenuState {
   wordId: string | null;
 }
 
-const NAV_SECTIONS: { key: NavSection; label: string }[] = [
-  { key: 'NEED_TO_LEARN', label: 'Need to Learn' },
-  { key: 'NEED_TO_USE',   label: 'Use More Often' },
-  { key: 'KNOW_WELL',     label: 'Know Well' },
+const NAV_SECTIONS: { key: NavSection; label: string; Icon: React.ElementType; activeText: string; cardGlow: string }[] = [
+  { key: 'NEED_TO_LEARN', label: 'Need to Learn', Icon: BookOpen,  activeText: 'text-amber-300',   cardGlow: 'border-zinc-700/50 hover:border-amber-600/25 hover:shadow-[0_0_20px_rgba(245,158,11,0.08)]'   },
+  { key: 'NEED_TO_USE',   label: 'Use More Often', Icon: RotateCcw, activeText: 'text-teal-300',    cardGlow: 'border-teal-900/30 hover:border-teal-600/30 hover:shadow-[0_0_20px_rgba(20,184,166,0.08)]'    },
+  { key: 'KNOW_WELL',     label: 'Know Well',      Icon: Check,     activeText: 'text-emerald-300', cardGlow: 'border-emerald-900/30 hover:border-emerald-600/30 hover:shadow-[0_0_20px_rgba(52,211,153,0.08)]' },
 ];
 
 function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> {
@@ -224,9 +224,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
               ? isBulkSelected
                 ? 'border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30'
                 : 'border-zinc-700/50 hover:border-red-500/30'
-              : isNeedToUse
-                ? 'border-teal-900/30 hover:border-teal-800/50'
-                : 'border-zinc-700/50 hover:border-zinc-600'
+              : (NAV_SECTIONS.find(s => s.key === section)?.cardGlow ?? 'border-zinc-700/50 hover:border-zinc-600')
         } ${!isReadOnly && !weeklyMode && !bulkArchiveMode ? 'cursor-grab active:cursor-grabbing' : ''} ${isCelebrating ? 'animate-celebrate' : ''} ${isExiting ? 'animate-card-exit' : 'animate-card-enter'}`}
       >
         {weeklyMode && (
@@ -333,7 +331,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
             {/* Words sub-nav */}
             {activeSection === 'words' && (
               <div className="space-y-1">
-                {NAV_SECTIONS.map(({ key, label }) => (
+                {NAV_SECTIONS.map(({ key, label, Icon, activeText }) => (
                   <button
                     key={key}
                     onClick={() => setActiveNavSection(key)}
@@ -347,12 +345,13 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
                         await updateWord(wordId, getWordUpdatesForSection(key));
                       }
                     }}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                       activeNavSection === key
-                        ? 'bg-zinc-800 text-zinc-100'
+                        ? `bg-zinc-800 ${activeText}`
                         : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
                     } ${dragOverSection === key ? 'ring-2 ring-teal-500/50 bg-zinc-800/60' : ''}`}
                   >
+                    <Icon size={14} className="shrink-0" />
                     {label}
                   </button>
                 ))}
