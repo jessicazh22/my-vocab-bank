@@ -566,9 +566,6 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
               <>
                 <p className="text-zinc-300 leading-relaxed">{localWord.definition}</p>
                 {localWord.word_type === 'word' && localWord.definition && (() => {
-                  // '' = explicitly no distinction → show nothing
-                  if (localWord.distinction === '') return null;
-
                   const synonym = localWord.distinction
                     ? extractSynonym(localWord.distinction, localWord.word)
                     : null;
