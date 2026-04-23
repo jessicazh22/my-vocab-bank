@@ -57,13 +57,16 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
   const [collocationScaffold, setCollocationScaffold] = useState<string | null>(null);
   const [collocationScaffoldLoading, setCollocationScaffoldLoading] = useState(false);
   const [distinctionRegenerating, setDistinctionRegenerating] = useState(false);
+  const [distinctionExpanded, setDistinctionExpanded] = useState(false);
 
   useEffect(() => {
     setLocalWord(word);
   }, [word]);
 
   // Auto-clean any stored "Unable to generate examples." error strings from example_sentence
+  // Also reset distinction expanded state when the word changes
   useEffect(() => {
+    setDistinctionExpanded(!!localWord.distinction);
     if (!localWord.example_sentence) return;
     if (!localWord.example_sentence.includes('Unable to generate')) return;
     const cleaned = localWord.example_sentence
@@ -204,9 +207,10 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
         definition: localWord.definition,
         distinctionOnly: true,
       });
-      const newDistinction = data.distinction || undefined;
+      const newDistinction = data.distinction || '';
       await updateWord(localWord.id, { distinction: newDistinction });
       setLocalWord(prev => ({ ...prev, distinction: newDistinction }));
+      if (newDistinction) setDistinctionExpanded(true);
     } catch {
       // fail silently
     } finally {
@@ -561,40 +565,64 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
             ) : (
               <>
                 <p className="text-zinc-300 leading-relaxed">{localWord.definition}</p>
-                {localWord.distinction ? (
-                  <div className="group flex items-start gap-1.5 mt-2">
-                    <div className="flex-1">
-                      {extractSynonym(localWord.distinction, localWord.word) && (
-                        <span className="text-zinc-700 text-[10px] uppercase tracking-wide mr-1.5">
-                          vs. {extractSynonym(localWord.distinction, localWord.word)}
-                        </span>
+                {localWord.word_type === 'word' && localWord.definition && (() => {
+                  // '' = explicitly no distinction → show nothing
+                  if (localWord.distinction === '') return null;
+
+                  const synonym = localWord.distinction
+                    ? extractSynonym(localWord.distinction, localWord.word)
+                    : null;
+
+                  return (
+                    <div className="mt-1.5">
+                      {/* Collapsed button — shown when null (unchecked) or when user has collapsed */}
+                      {(!distinctionExpanded || localWord.distinction == null) && (
+                        <button
+                          onClick={() => {
+                            if (localWord.distinction == null) handleRegenerateDistinction();
+                            else setDistinctionExpanded(true);
+                          }}
+                          disabled={distinctionRegenerating}
+                          className="text-zinc-700 hover:text-zinc-500 text-xs transition-colors disabled:opacity-50"
+                        >
+                          {distinctionRegenerating
+                            ? <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" />checking...</span>
+                            : localWord.distinction == null
+                              ? 'How does it differ?'
+                              : `How does it differ from ${synonym ?? localWord.word}?`}
+                        </button>
                       )}
-                      <p className="text-zinc-600 text-xs leading-relaxed italic inline">
-                        {localWord.distinction}
-                      </p>
+
+                      {/* Expanded distinction text */}
+                      {distinctionExpanded && localWord.distinction && (
+                        <div className="group flex items-start gap-1.5">
+                          <div className="flex-1">
+                            <button
+                              onClick={() => setDistinctionExpanded(false)}
+                              className="text-zinc-700 text-[10px] uppercase tracking-wide mr-1.5 hover:text-zinc-500 transition-colors"
+                              title="Collapse"
+                            >
+                              {synonym ? `vs. ${synonym}` : '▲'}
+                            </button>
+                            <p className="text-zinc-600 text-xs leading-relaxed italic inline">
+                              {localWord.distinction}
+                            </p>
+                          </div>
+                          {!isReadOnly && (
+                            <button
+                              onClick={handleRegenerateDistinction}
+                              disabled={distinctionRegenerating}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-700 hover:text-zinc-400 mt-0.5 shrink-0 disabled:opacity-50"
+                              title="Regenerate"
+                            >
+                              {distinctionRegenerating ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {!isReadOnly && (
-                      <button
-                        onClick={handleRegenerateDistinction}
-                        disabled={distinctionRegenerating}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-700 hover:text-zinc-400 mt-0.5 shrink-0 disabled:opacity-50"
-                        title="Regenerate distinction note"
-                      >
-                        {distinctionRegenerating ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />}
-                      </button>
-                    )}
-                  </div>
-                ) : !isReadOnly && localWord.word_type === 'word' && localWord.definition && (
-                  <button
-                    onClick={handleRegenerateDistinction}
-                    disabled={distinctionRegenerating}
-                    className="text-zinc-700 hover:text-zinc-500 text-xs mt-1.5 transition-colors disabled:opacity-50"
-                  >
-                    {distinctionRegenerating
-                      ? <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> checking...</span>
-                      : 'How does it differ?'}
-                  </button>
-                )}
+                  );
+                })()}
               </>
             )}
           </div>
