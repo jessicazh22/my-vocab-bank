@@ -12,10 +12,17 @@ interface RequestPayload {
   sentence: string;
 }
 
+interface Swap {
+  original: string;
+  improved: string;
+  reason: string;
+}
+
 interface EvaluationResponse {
   correct: boolean;
-  feedback: string;
-  suggestion?: string | null;
+  meaningCorrection?: string | null;
+  structureNote?: string | null;
+  swaps: Swap[];
 }
 
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
@@ -38,20 +45,25 @@ Deno.serve(async (req: Request) => {
   try {
     const { word, definition, sentence }: RequestPayload = await req.json();
 
-    const systemPrompt = `You are a vocabulary coach evaluating a student's sentence.
+    const systemPrompt = `You are a vocabulary coach giving surgical feedback on a student's sentence.
 
 Return ONLY this JSON:
 {
   "correct": true/false,
-  "feedback": "One sentence: is the target word used correctly?",
-  "suggestion": null
+  "meaningCorrection": null,
+  "structureNote": null,
+  "swaps": []
 }
 
 Rules:
-- feedback: focus on whether the target word is used correctly
-- suggestion: read the whole sentence as a native speaker. If any phrase sounds unnatural or awkward, quote it and give a natural alternative (e.g. "about-to-become father" → "expectant father" or "soon-to-be father"). Return null if the sentence already sounds natural — do NOT force a suggestion.
-- Never use structural terms like "first clause", "second clause"
-- Keep feedback and suggestion to 1–2 sentences each
+- correct: true if the target word is used with the right meaning, false if not
+- meaningCorrection: if correct=false, one sentence explaining the right meaning and how to fix it. Set to null if correct=true. When correct=false, set swaps to [] — don't critique style when the meaning is wrong.
+- structureNote: a short label (max 8 words) for a genuine structural issue only — e.g. "tells the feeling rather than showing it", "fragment — needs a main verb", "redundant — the word already implies this". Set to null if the sentence is structurally fine.
+- swaps: 1–2 surgical phrase replacements that improve the sentence. Each swap must:
+  - "original": an exact phrase from the student's sentence (copy it verbatim)
+  - "improved": a better replacement phrase
+  - "reason": one short phrase explaining why — e.g. "more idiomatic", "more active", "already implied by ${word}", "shows rather than names the feeling", "tighter"
+  Keep the student's sentence structure — swap phrases, never rewrite the whole thing. Focus on: unnatural phrasing, word choice that undersells the target word, endings that tell instead of show, or redundancy. If the sentence is already strong, return swaps: [].
 - Return ONLY the JSON object, no other text`;
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -66,7 +78,7 @@ Rules:
           { role: "system", content: systemPrompt },
           { role: "user", content: `Word: "${word}"\nDefinition: "${definition}"\nStudent's sentence: "${sentence}"` },
         ],
-        max_tokens: 150,
+        max_tokens: 250,
         temperature: 0.3,
       }),
     });
@@ -90,13 +102,17 @@ Rules:
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         evaluation = JSON.parse(jsonMatch[0]);
+        // Ensure swaps is always an array
+        if (!Array.isArray(evaluation.swaps)) evaluation.swaps = [];
       } else {
         throw new Error("No JSON found in response");
       }
     } catch {
       evaluation = {
         correct: true,
-        feedback: "Great job practicing!",
+        meaningCorrection: null,
+        structureNote: null,
+        swaps: [],
       };
     }
 

@@ -34,10 +34,47 @@ interface PreviousEnrichment {
   scaffold_prompt?: string;
 }
 
+interface Swap {
+  original: string;
+  improved: string;
+  reason: string;
+}
+
 interface Feedback {
   correct: boolean;
-  feedback: string;
-  suggestion?: string | null;
+  meaningCorrection?: string | null;
+  structureNote?: string | null;
+  swaps: Swap[];
+}
+
+function renderSwappedSentence(sentence: string, swaps: Swap[]) {
+  type Part = { text: string; type: 'normal' | 'struck' | 'improved' };
+  let remaining = sentence;
+  const parts: Part[] = [];
+
+  for (const swap of swaps) {
+    const idx = remaining.toLowerCase().indexOf(swap.original.toLowerCase());
+    if (idx === -1) continue;
+    if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'normal' });
+    parts.push({ text: remaining.slice(idx, idx + swap.original.length), type: 'struck' });
+    parts.push({ text: swap.improved, type: 'improved' });
+    remaining = remaining.slice(idx + swap.original.length);
+  }
+  if (remaining) parts.push({ text: remaining, type: 'normal' });
+
+  return (
+    <span>
+      {parts.map((p, i) =>
+        p.type === 'struck' ? (
+          <span key={i} className="line-through text-zinc-600">{p.text}</span>
+        ) : p.type === 'improved' ? (
+          <span key={i} className="text-zinc-100 font-medium"> {p.text}</span>
+        ) : (
+          <span key={i} className="text-zinc-500">{p.text}</span>
+        )
+      )}
+    </span>
+  );
 }
 
 export default function WordDetail({ word, onClose, onWordUpdate, updateWord, practiceWord, isReadOnly = false }: WordDetailProps) {
@@ -452,39 +489,56 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                   )}
 
                   {feedback && (
-                    <div className="space-y-4">
-                      <div className={`p-4 rounded-xl border ${feedback.correct ? 'bg-emerald-900/20 border-emerald-700/50' : 'bg-rose-900/20 border-rose-700/50'}`}>
-                        <div className="flex items-start gap-3">
-                          <div className={`p-1.5 rounded-full shrink-0 ${feedback.correct ? 'bg-emerald-600' : 'bg-rose-600'}`}>
-                            {feedback.correct ? <Check size={14} className="text-white" /> : <X size={14} className="text-white" />}
-                          </div>
-                          <div className="space-y-2">
-                            <p className={`font-medium ${feedback.correct ? 'text-emerald-300' : 'text-rose-300'}`}>
-                              {feedback.correct ? 'Great job!' : 'Not quite'}
-                            </p>
-                            <p className="text-zinc-400 text-sm leading-relaxed">{feedback.feedback}</p>
-                            {feedback.suggestion && (
-                              <p className="text-zinc-500 text-sm leading-relaxed border-t border-zinc-700/50 pt-2 mt-2">{feedback.suggestion}</p>
-                            )}
-                          </div>
+                    <div className="space-y-3">
+                      {/* Verdict line */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className={`p-1 rounded-full shrink-0 ${feedback.correct ? 'bg-emerald-600' : 'bg-rose-600'}`}>
+                          {feedback.correct ? <Check size={12} className="text-white" /> : <X size={12} className="text-white" />}
                         </div>
+                        <span className="text-xs text-zinc-400">
+                          {feedback.correct ? 'Used correctly.' : 'Check the meaning.'}
+                        </span>
+                        {feedback.structureNote && (
+                          <span className="text-xs text-zinc-600 italic">— {feedback.structureNote}</span>
+                        )}
                       </div>
 
-                      <div className="bg-zinc-800/30 rounded-lg p-3">
-                        <div className="text-xs text-zinc-500 mb-1">Your sentence:</div>
-                        <p className="text-zinc-400 text-sm italic">"{userSentence}"</p>
-                      </div>
+                      {/* Meaning correction — only when wrong */}
+                      {feedback.meaningCorrection && (
+                        <p className="text-rose-300 text-xs leading-relaxed">{feedback.meaningCorrection}</p>
+                      )}
 
-                      <div className="flex gap-3">
+                      {/* Annotated sentence with swaps inline */}
+                      {feedback.swaps?.length > 0 && (
+                        <div className="bg-zinc-800/40 rounded-lg p-3 text-sm leading-relaxed">
+                          {renderSwappedSentence(userSentence, feedback.swaps)}
+                        </div>
+                      )}
+
+                      {/* Swap reasons */}
+                      {feedback.swaps?.length > 0 && (
+                        <div className="space-y-1.5">
+                          {feedback.swaps.map((swap, i) => (
+                            <p key={i} className="text-xs text-zinc-500 flex items-baseline gap-1.5 flex-wrap">
+                              <span className="line-through text-zinc-600 shrink-0">{swap.original}</span>
+                              <span className="text-zinc-300 shrink-0">→ {swap.improved}</span>
+                              <span className="text-zinc-600">— {swap.reason}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex gap-3 pt-1">
                         <button
                           onClick={handleTryAgain}
-                          className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors font-medium"
+                          className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-sm font-medium"
                         >
                           Edit & resubmit
                         </button>
                         <button
                           onClick={handleExitLearning}
-                          className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded-lg transition-colors font-medium"
+                          className="flex-1 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded-lg transition-colors text-sm font-medium"
                         >
                           Done
                         </button>
