@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, BookMarked, GraduationCap, Loader2, RefreshCw, Undo2, Check, Sparkles, RotateCcw, Globe, Lock } from 'lucide-react';
+import { X, BookMarked, GraduationCap, Loader2, RefreshCw, Undo2, Sparkles, RotateCcw, Globe, Lock } from 'lucide-react';
 import { VocabularyWord, callEdgeFunction } from '../lib/supabase';
 import { getTagColor } from '../lib/utils';
+import { Rating, Usefulness, Feedback, computeDays, USEFULNESS_LABELS } from '../lib/srs';
+import SentenceFeedback from './SentenceFeedback';
+import ScaffoldPrompt from './ScaffoldPrompt';
 import ChatPanel from './ChatPanel';
 
 function extractSynonym(distinction: string, word: string): string | null {
@@ -19,22 +22,6 @@ function extractSynonym(distinction: string, word: string): string | null {
   return null;
 }
 
-type Rating = 'again' | 'hard' | 'good' | 'easy';
-type Usefulness = 1 | 2 | 3 | 4;
-
-const RATING_DAYS: Record<Rating, number> = { again: 1, hard: 3, good: 7, easy: 21 };
-const USEFULNESS_MULT: Record<Usefulness, number> = { 1: 1.5, 2: 1.0, 3: 0.7, 4: 2.5 };
-const USEFULNESS_LABELS: Record<Usefulness, string> = {
-  1: 'Just know it',
-  2: 'Sometimes',
-  3: 'In the right context',
-  4: 'Know it very well',
-};
-
-function computeDays(rating: Rating, usefulness: Usefulness): number {
-  return Math.round(RATING_DAYS[rating] * USEFULNESS_MULT[usefulness]);
-}
-
 interface WordDetailProps {
   word: VocabularyWord;
   onClose: () => void;
@@ -49,49 +36,6 @@ interface PreviousEnrichment {
   example_sentence: string;
   context: string;
   scaffold_prompt?: string;
-}
-
-interface Swap {
-  original: string;
-  improved: string;
-  reason: string;
-}
-
-interface Feedback {
-  correct: boolean;
-  meaningCorrection?: string | null;
-  structureNote?: string | null;
-  swaps: Swap[];
-}
-
-function renderSwappedSentence(sentence: string, swaps: Swap[]) {
-  type Part = { text: string; type: 'normal' | 'struck' | 'improved' };
-  let remaining = sentence;
-  const parts: Part[] = [];
-
-  for (const swap of swaps) {
-    const idx = remaining.toLowerCase().indexOf(swap.original.toLowerCase());
-    if (idx === -1) continue;
-    if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'normal' });
-    parts.push({ text: remaining.slice(idx, idx + swap.original.length), type: 'struck' });
-    parts.push({ text: swap.improved, type: 'improved' });
-    remaining = remaining.slice(idx + swap.original.length);
-  }
-  if (remaining) parts.push({ text: remaining, type: 'normal' });
-
-  return (
-    <span>
-      {parts.map((p, i) =>
-        p.type === 'struck' ? (
-          <span key={i} className="line-through text-zinc-600">{p.text}</span>
-        ) : p.type === 'improved' ? (
-          <span key={i} className="text-zinc-100 font-medium"> {p.text}</span>
-        ) : (
-          <span key={i} className="text-zinc-500">{p.text}</span>
-        )
-      )}
-    </span>
-  );
 }
 
 export default function WordDetail({ word, onClose, onWordUpdate, updateWord, practiceWord, setReviewDate, isReadOnly = false }: WordDetailProps) {
@@ -499,29 +443,16 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                         </div>
                       )}
 
-                      {targetCollocation ? (
-                        <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg">
-                          {collocationScaffoldLoading ? (
-                            <div className="flex items-center gap-2">
-                              <Loader2 size={14} className="animate-spin text-amber-400" />
-                              <p className="text-amber-200/60 text-sm">Generating a prompt...</p>
-                            </div>
-                          ) : (
-                            <p className="text-amber-200/80 text-sm leading-relaxed">
-                              {collocationScaffold ?? `Try using '${targetCollocation.phrase}' in a sentence${targetCollocation.note ? ` — ${targetCollocation.note}` : ''}.`}
-                            </p>
-                          )}
-                        </div>
-                      ) : scaffoldLoading ? (
-                        <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg flex items-center gap-2">
-                          <Loader2 size={14} className="animate-spin text-amber-400" />
-                          <p className="text-amber-200/60 text-sm">Generating a prompt to help you...</p>
-                        </div>
-                      ) : localWord.scaffold_prompt ? (
-                        <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg">
-                          <p className="text-amber-200/80 text-sm leading-relaxed">{localWord.scaffold_prompt}</p>
-                        </div>
-                      ) : null}
+                      <ScaffoldPrompt
+                        loading={targetCollocation ? collocationScaffoldLoading : scaffoldLoading}
+                        text={targetCollocation
+                          ? (collocationScaffold ?? undefined)
+                          : (localWord.scaffold_prompt ?? undefined)}
+                        fallback={targetCollocation
+                          ? `Try using '${targetCollocation.phrase}' in a sentence${targetCollocation.note ? ` — ${targetCollocation.note}` : ''}.`
+                          : undefined}
+                        loadingLabel={targetCollocation ? 'Generating a prompt...' : 'Generating a prompt to help you...'}
+                      />
 
                       <textarea
                         value={userSentence}
@@ -550,47 +481,14 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                   )}
 
                   {feedback && (
-                    <div className="space-y-3">
-                      {/* Verdict line */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className={`p-1 rounded-full shrink-0 ${feedback.correct ? 'bg-emerald-600' : 'bg-rose-600'}`}>
-                          {feedback.correct ? <Check size={12} className="text-white" /> : <X size={12} className="text-white" />}
-                        </div>
-                        <span className="text-xs text-zinc-400">
-                          {feedback.correct ? 'Used correctly.' : 'Check the meaning.'}
-                        </span>
-                        {feedback.structureNote && (
-                          <span className="text-xs text-zinc-600 italic">— {feedback.structureNote}</span>
-                        )}
-                      </div>
-
-                      {/* Meaning correction — only when wrong */}
-                      {feedback.meaningCorrection && (
-                        <p className="text-rose-300 text-xs leading-relaxed">{feedback.meaningCorrection}</p>
-                      )}
-
-                      {/* Annotated sentence with swaps inline */}
-                      {feedback.swaps?.length > 0 && (
-                        <div className="bg-zinc-800/40 rounded-lg p-3 text-sm leading-relaxed">
-                          {renderSwappedSentence(userSentence, feedback.swaps)}
-                        </div>
-                      )}
-
-                      {/* Swap reasons */}
-                      {feedback.swaps?.length > 0 && (
-                        <div className="space-y-1.5">
-                          {feedback.swaps.map((swap, i) => (
-                            <p key={i} className="text-xs text-zinc-500 flex items-baseline gap-1.5 flex-wrap">
-                              <span className="line-through text-zinc-600 shrink-0">{swap.original}</span>
-                              <span className="text-zinc-300 shrink-0">→ {swap.improved}</span>
-                              <span className="text-zinc-600">— {swap.reason}</span>
-                            </p>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Action buttons */}
-                      {showUsefulnessPicker ? (
+                    <SentenceFeedback
+                      feedback={feedback}
+                      sentence={userSentence}
+                      onRate={handleRate}
+                      onTryAgain={handleTryAgain}
+                      savingRating={savingRating}
+                      confirmedDays={confirmedDays}
+                      actionsSlot={showUsefulnessPicker ? (
                         <div className="space-y-3 pt-1">
                           <div>
                             <p className="text-xs text-zinc-400 mb-2">
@@ -620,38 +518,8 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                             </p>
                           )}
                         </div>
-                      ) : confirmedDays !== null ? (
-                        <p className="text-xs text-zinc-500 text-center pt-1">
-                          See you in ~{confirmedDays} day{confirmedDays !== 1 ? 's' : ''}
-                        </p>
-                      ) : (
-                        <div className="space-y-2 pt-1">
-                          <div className="grid grid-cols-4 gap-1.5">
-                            {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
-                              <button
-                                key={r}
-                                onClick={() => handleRate(r)}
-                                disabled={savingRating}
-                                className={`py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 capitalize ${
-                                  r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
-                                  r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
-                                  r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
-                                                  'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
-                                }`}
-                              >
-                                {r}
-                              </button>
-                            ))}
-                          </div>
-                          <button
-                            onClick={handleTryAgain}
-                            className="w-full text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1"
-                          >
-                            Edit & resubmit
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                      ) : undefined}
+                    />
                   )}
 
                   <div className="border-t border-zinc-800 pt-5">

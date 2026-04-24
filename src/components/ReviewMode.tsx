@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { VocabularyWord, callEdgeFunction } from '../lib/supabase';
 import { X, Check, Loader2 } from 'lucide-react';
+import { Rating, Feedback, computeDays } from '../lib/srs';
+import SentenceFeedback from './SentenceFeedback';
+import ScaffoldPrompt from './ScaffoldPrompt';
 import ChatPanel from './ChatPanel';
 
 type ReviewType = 'learn' | 'revise' | 'review';
-type Rating = 'again' | 'hard' | 'good' | 'easy';
 
-interface Swap { original: string; improved: string; reason: string; }
-interface Feedback { correct: boolean; meaningCorrection?: string | null; structureNote?: string | null; swaps: Swap[]; }
 interface McOptions { options: string[]; bestIndex: number; reason: string; }
 
 interface ReviewModeProps {
@@ -26,43 +26,8 @@ const REVISE_PROMPTS = [
   { prompt: "Where could you slip this into conversation?", verb: "imagining" },
 ];
 
-const RATING_DAYS: Record<Rating, number> = { again: 1, hard: 3, good: 7, easy: 21 };
-const USEFULNESS_MULT: Record<number, number> = { 1: 1.5, 2: 1.0, 3: 0.7, 4: 2.5 };
-
-function computeDays(rating: Rating, usefulness: number): number {
-  return Math.round(RATING_DAYS[rating] * (USEFULNESS_MULT[usefulness] ?? 1.0));
-}
-
 function getRandomPrompt() {
   return REVISE_PROMPTS[Math.floor(Math.random() * REVISE_PROMPTS.length)];
-}
-
-function renderSwappedSentence(sentence: string, swaps: Swap[]) {
-  type Part = { text: string; type: 'normal' | 'struck' | 'improved' };
-  let remaining = sentence;
-  const parts: Part[] = [];
-  for (const swap of swaps) {
-    const idx = remaining.toLowerCase().indexOf(swap.original.toLowerCase());
-    if (idx === -1) continue;
-    if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'normal' });
-    parts.push({ text: remaining.slice(idx, idx + swap.original.length), type: 'struck' });
-    parts.push({ text: swap.improved, type: 'improved' });
-    remaining = remaining.slice(idx + swap.original.length);
-  }
-  if (remaining) parts.push({ text: remaining, type: 'normal' });
-  return (
-    <span>
-      {parts.map((p, i) =>
-        p.type === 'struck' ? (
-          <span key={i} className="line-through text-zinc-600">{p.text}</span>
-        ) : p.type === 'improved' ? (
-          <span key={i} className="text-zinc-100 font-medium"> {p.text}</span>
-        ) : (
-          <span key={i} className="text-zinc-500">{p.text}</span>
-        )
-      )}
-    </span>
-  );
 }
 
 const SESSION_SIZE = 5;
@@ -599,24 +564,15 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                           {mcRevealed && (
                             <div className="space-y-3 pt-1">
                               <p className="text-xs text-zinc-500 text-left pl-1">{mcOptions.reason}</p>
-                              <div className="grid grid-cols-4 gap-1.5">
-                                {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
-                                  <button
-                                    key={r}
-                                    onClick={() => handleRate(r)}
-                                    disabled={savingRating}
-                                    className={`py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 capitalize ${
-                                      r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
-                                      r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
-                                      r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
-                                                      'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
-                                    }`}
-                                  >
-                                    {r}
-                                  </button>
-                                ))}
-                              </div>
-                              <button onClick={handleSkip} className="w-full text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1">Skip</button>
+                              <SentenceFeedback
+                                feedback={{ correct: true, swaps: [] }}
+                                sentence=""
+                                onRate={handleRate}
+                                onTryAgain={() => {}}
+                                onSkip={handleSkip}
+                                savingRating={savingRating}
+                                confirmedDays={confirmedRating?.days ?? null}
+                              />
                             </div>
                           )}
                         </>
@@ -672,7 +628,7 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
   );
 }
 
-// ── Sentence production sub-component (used by review mode for usefulness >= 2, and as MC fallback)
+// ── Sentence production sub-component (review mode usefulness >= 2, and MC fallback)
 interface SentenceProductionProps {
   word: VocabularyWord;
   selectedCollocation: string | null;
@@ -704,25 +660,13 @@ function ReviewSentenceProduction({
         </p>
       ) : !reviewFeedback ? (
         <>
-          {/* Scaffold: prefer live collocation scaffold, then stored scaffold */}
-          {selectedCollocation ? (
-            <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg text-left">
-              {collocationScaffoldLoading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin text-amber-400" />
-                  <p className="text-amber-200/60 text-sm">Generating a prompt...</p>
-                </div>
-              ) : (
-                <p className="text-amber-200/80 text-sm leading-relaxed">
-                  {collocationScaffold ?? `Try using '${selectedCollocation}' in a sentence.`}
-                </p>
-              )}
-            </div>
-          ) : word.scaffold_prompt ? (
-            <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg text-left">
-              <p className="text-amber-200/80 text-sm leading-relaxed">{word.scaffold_prompt}</p>
-            </div>
-          ) : null}
+          <ScaffoldPrompt
+            loading={selectedCollocation ? collocationScaffoldLoading : false}
+            text={selectedCollocation
+              ? (collocationScaffold ?? undefined)
+              : (word.scaffold_prompt ?? undefined)}
+            fallback={selectedCollocation ? `Try using '${selectedCollocation}' in a sentence.` : undefined}
+          />
           <div className="text-left">
             <textarea
               value={reviewSentence}
@@ -742,63 +686,15 @@ function ReviewSentenceProduction({
           </button>
         </>
       ) : (
-        <div className="space-y-3 text-left">
-          {/* Feedback */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className={`p-1 rounded-full shrink-0 ${reviewFeedback.correct ? 'bg-emerald-600' : 'bg-rose-600'}`}>
-              {reviewFeedback.correct
-                ? <Check size={12} className="text-white" />
-                : <X size={12} className="text-white" />}
-            </div>
-            <span className="text-xs text-zinc-400">
-              {reviewFeedback.correct ? 'Used correctly.' : 'Check the meaning.'}
-            </span>
-            {reviewFeedback.structureNote && (
-              <span className="text-xs text-zinc-600 italic">— {reviewFeedback.structureNote}</span>
-            )}
-          </div>
-          {reviewFeedback.meaningCorrection && (
-            <p className="text-rose-300 text-xs leading-relaxed">{reviewFeedback.meaningCorrection}</p>
-          )}
-          {reviewFeedback.swaps?.length > 0 && (
-            <div className="bg-zinc-800/40 rounded-lg p-3 text-sm leading-relaxed">
-              {renderSwappedSentence(reviewSentence, reviewFeedback.swaps)}
-            </div>
-          )}
-          {reviewFeedback.swaps?.length > 0 && (
-            <div className="space-y-1.5">
-              {reviewFeedback.swaps.map((swap, i) => (
-                <p key={i} className="text-xs text-zinc-500 flex items-baseline gap-1.5 flex-wrap">
-                  <span className="line-through text-zinc-600 shrink-0">{swap.original}</span>
-                  <span className="text-zinc-300 shrink-0">→ {swap.improved}</span>
-                  <span className="text-zinc-600">— {swap.reason}</span>
-                </p>
-              ))}
-            </div>
-          )}
-          {/* Rating buttons */}
-          <div className="grid grid-cols-4 gap-1.5 pt-1">
-            {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
-              <button
-                key={r}
-                onClick={() => handleRate(r)}
-                disabled={savingRating}
-                className={`py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 capitalize ${
-                  r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
-                  r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
-                  r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
-                                  'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center justify-between pt-0.5">
-            <button onClick={handleTryAgain} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1">Edit & resubmit</button>
-            <button onClick={handleSkip} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1">Skip</button>
-          </div>
-        </div>
+        <SentenceFeedback
+          feedback={reviewFeedback}
+          sentence={reviewSentence}
+          onRate={handleRate}
+          onTryAgain={handleTryAgain}
+          onSkip={handleSkip}
+          savingRating={savingRating}
+          confirmedDays={confirmedRating?.days ?? null}
+        />
       )}
     </div>
   );
