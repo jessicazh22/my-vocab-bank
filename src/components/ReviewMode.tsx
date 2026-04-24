@@ -1,10 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-import { VocabularyWord } from '../lib/supabase';
-import { X } from 'lucide-react';
+import { VocabularyWord, callEdgeFunction } from '../lib/supabase';
+import { X, Check, Loader2 } from 'lucide-react';
 import ChatPanel from './ChatPanel';
 
 type ReviewType = 'learn' | 'revise' | 'review';
 type Rating = 'again' | 'hard' | 'good' | 'easy';
+
+interface Swap { original: string; improved: string; reason: string; }
+interface Feedback { correct: boolean; meaningCorrection?: string | null; structureNote?: string | null; swaps: Swap[]; }
+interface McOptions { options: string[]; bestIndex: number; reason: string; }
 
 interface ReviewModeProps {
   words: VocabularyWord[];
@@ -33,6 +37,34 @@ function getRandomPrompt() {
   return REVISE_PROMPTS[Math.floor(Math.random() * REVISE_PROMPTS.length)];
 }
 
+function renderSwappedSentence(sentence: string, swaps: Swap[]) {
+  type Part = { text: string; type: 'normal' | 'struck' | 'improved' };
+  let remaining = sentence;
+  const parts: Part[] = [];
+  for (const swap of swaps) {
+    const idx = remaining.toLowerCase().indexOf(swap.original.toLowerCase());
+    if (idx === -1) continue;
+    if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'normal' });
+    parts.push({ text: remaining.slice(idx, idx + swap.original.length), type: 'struck' });
+    parts.push({ text: swap.improved, type: 'improved' });
+    remaining = remaining.slice(idx + swap.original.length);
+  }
+  if (remaining) parts.push({ text: remaining, type: 'normal' });
+  return (
+    <span>
+      {parts.map((p, i) =>
+        p.type === 'struck' ? (
+          <span key={i} className="line-through text-zinc-600">{p.text}</span>
+        ) : p.type === 'improved' ? (
+          <span key={i} className="text-zinc-100 font-medium"> {p.text}</span>
+        ) : (
+          <span key={i} className="text-zinc-500">{p.text}</span>
+        )
+      )}
+    </span>
+  );
+}
+
 const SESSION_SIZE = 5;
 
 export default function ReviewMode({ words, mode, onClose, practiceWord }: ReviewModeProps) {
@@ -46,37 +78,43 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
   const [sessionDone, setSessionDone] = useState(false);
   const [sessionResults, setSessionResults] = useState<Array<{ word: string; rating: Rating; days: number }>>([]);
 
+  // Review mode: sentence practice state
+  const [reviewFeedback, setReviewFeedback] = useState<Feedback | null>(null);
+  const [reviewEvaluating, setReviewEvaluating] = useState(false);
+  const [reviewSentence, setReviewSentence] = useState('');
+
+  // Review mode: A/B/C state (usefulness=1)
+  const [mcOptions, setMcOptions] = useState<McOptions | null>(null);
+  const [mcLoading, setMcLoading] = useState(false);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [mcRevealed, setMcRevealed] = useState(false);
+
   const now = useMemo(() => new Date(), []);
 
-  // Build session word list
   const reviewWords = useMemo(() => {
     if (mode === 'learn') {
-      const filtered = words.filter(
-        (w) => (w.category === 'LEARNING' || w.category === 'JUST_ADDED') && w.word_type !== 'sentence'
-      );
-      return filtered.sort((a, b) => {
-        const aDue = a.next_review_at && new Date(a.next_review_at) <= now;
-        const bDue = b.next_review_at && new Date(b.next_review_at) <= now;
-        if (aDue && !bDue) return -1;
-        if (!aDue && bDue) return 1;
-        return 0;
-      });
+      return words
+        .filter(w => (w.category === 'LEARNING' || w.category === 'JUST_ADDED') && w.word_type !== 'sentence')
+        .sort((a, b) => {
+          const aDue = a.next_review_at && new Date(a.next_review_at) <= now;
+          const bDue = b.next_review_at && new Date(b.next_review_at) <= now;
+          if (aDue && !bDue) return -1;
+          if (!aDue && bDue) return 1;
+          return 0;
+        });
     }
-
     if (mode === 'revise') {
-      const filtered = words.filter(
-        (w) => w.word_type === 'sentence' || w.familiarity === 'NEED_TO_USE'
-      );
-      return filtered.sort((a, b) => {
-        const aDue = a.next_review_at && new Date(a.next_review_at) <= now;
-        const bDue = b.next_review_at && new Date(b.next_review_at) <= now;
-        if (aDue && !bDue) return -1;
-        if (!aDue && bDue) return 1;
-        return 0;
-      });
+      return words
+        .filter(w => w.word_type === 'sentence' || w.familiarity === 'NEED_TO_USE')
+        .sort((a, b) => {
+          const aDue = a.next_review_at && new Date(a.next_review_at) <= now;
+          const bDue = b.next_review_at && new Date(b.next_review_at) <= now;
+          if (aDue && !bDue) return -1;
+          if (!aDue && bDue) return 1;
+          return 0;
+        });
     }
-
-    // Review mode: build a capped session
+    // Review mode: capped session
     const due = words
       .filter(w => !w.is_archived && w.next_review_at && new Date(w.next_review_at) <= now)
       .sort((a, b) => {
@@ -91,7 +129,6 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
       (w.category === 'JUST_ADDED' || w.category === 'LEARNING')
     );
     const newWord = newWords[0] ?? null;
-
     return newWord ? [...due, newWord] : due;
   }, [words, mode, now]);
 
@@ -102,11 +139,13 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
 
   const currentWord = useMemo(() => reviewWords[currentIndex], [reviewWords, currentIndex]);
 
+  const isRecognitionMode = mode === 'review' && (currentWord?.usefulness ?? 2) === 1;
+
   useEffect(() => {
     if (reviewWords.length === 0 && mode !== 'review') onClose();
   }, [reviewWords.length, mode, onClose]);
 
-  // For review mode: get valid collocations for current word
+  // Valid collocations for current word
   const validCollocations = useMemo(() => {
     if (!currentWord?.collocations?.pairs) return [];
     const wordLower = currentWord.word.toLowerCase();
@@ -115,17 +154,46 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
     );
   }, [currentWord]);
 
-  // Auto-select collocation if only one valid one
+  // Reset per-word state when word changes
   useEffect(() => {
     setSelectedCollocation(null);
     setShowContent(false);
     setConfirmedRating(null);
+    setReviewFeedback(null);
+    setReviewSentence('');
+    setReviewEvaluating(false);
+    setMcOptions(null);
+    setMcLoading(false);
+    setSelectedOption(null);
+    setMcRevealed(false);
   }, [currentIndex]);
+
+  // Load MC options when content is shown for usefulness=1 words in review mode
+  useEffect(() => {
+    if (!showContent || !isRecognitionMode || mcOptions || mcLoading) return;
+    const word = currentWord;
+    if (!word) return;
+    setMcLoading(true);
+    callEdgeFunction<McOptions>('enrich-word', {
+      word: word.word,
+      definition: word.definition,
+      multipleChoiceOnly: true,
+    }).then(data => {
+      if (data?.options?.length === 3 && typeof data.bestIndex === 'number') {
+        setMcOptions(data);
+      }
+    }).catch(() => {
+      // fail silently — falls back to sentence production
+    }).finally(() => {
+      setMcLoading(false);
+    });
+  }, [showContent, isRecognitionMode, currentWord, mcOptions, mcLoading]);
 
   if (reviewWords.length === 0 && mode !== 'review') return null;
 
+  // Session done screen
   if (sessionDone || (mode === 'review' && reviewWords.length === 0)) {
-    const remaining = totalDue - sessionResults.filter(r => r.rating !== undefined).length;
+    const remaining = Math.max(0, totalDue - sessionResults.length);
     return (
       <div className="fixed inset-0 bg-zinc-900 z-50 overflow-auto">
         <div className="min-h-screen flex flex-col items-center justify-center p-8">
@@ -188,11 +256,8 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
     if (currentIndex < reviewWords.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      if (mode === 'review') {
-        setSessionDone(true);
-      } else {
-        onClose();
-      }
+      if (mode === 'review') setSessionDone(true);
+      else onClose();
     }
   };
 
@@ -209,22 +274,42 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
     const usefulness = currentWord.usefulness ?? 2;
     const days = computeDays(rating, usefulness);
     setConfirmedRating({ rating, days });
-    await practiceWord(currentWord.id, '', rating);
+    const sentenceToSave = mode === 'review' ? reviewSentence : '';
+    await practiceWord(currentWord.id, sentenceToSave, rating);
     setSessionResults(prev => [...prev, { word: currentWord.word, rating, days }]);
     setSavingRating(false);
     setTimeout(() => goToNext(), 900);
   };
 
-  const handleSkip = () => {
-    goToNext();
+  const handleSkip = () => goToNext();
+
+  const handleReviewSubmit = async () => {
+    if (!reviewSentence.trim()) return;
+    setReviewEvaluating(true);
+    try {
+      const data = await callEdgeFunction<Feedback>('evaluate-sentence', {
+        word: currentWord.word,
+        definition: currentWord.definition,
+        sentence: reviewSentence,
+      });
+      setReviewFeedback(data);
+    } catch {
+      setReviewFeedback({ correct: true, swaps: [] });
+    } finally {
+      setReviewEvaluating(false);
+    }
   };
 
   const isSentence = currentWord.word_type === 'sentence';
+  const displayWord = mode === 'review' && selectedCollocation ? selectedCollocation : currentWord.word;
 
-  // Display word: in review mode, show selected collocation or bare word
-  const displayWord = mode === 'review' && selectedCollocation
-    ? selectedCollocation
-    : currentWord.word;
+  // Parse example sentences
+  const exampleSentences = currentWord.example_sentence
+    ? currentWord.example_sentence.split(' / ').filter(e => {
+        const clean = e.trim().replace('[yours] ', '').toLowerCase();
+        return clean && !clean.startsWith('unable to');
+      })
+    : [];
 
   return (
     <div className="fixed inset-0 bg-zinc-900 z-50 overflow-auto">
@@ -235,9 +320,9 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
               {currentIndex + 1} / {reviewWords.length}
             </span>
             <span className={`text-xs px-2 py-1 rounded ${
-              mode === 'learn'   ? 'bg-amber-900/30 text-amber-400' :
-              mode === 'revise'  ? 'bg-teal-900/30 text-teal-400' :
-                                   'bg-violet-900/30 text-violet-400'
+              mode === 'learn'  ? 'bg-amber-900/30 text-amber-400' :
+              mode === 'revise' ? 'bg-teal-900/30 text-teal-400' :
+                                  'bg-violet-900/30 text-violet-400'
             }`}>
               {mode === 'learn' ? 'Learn' : mode === 'revise' ? 'Revise' : 'Review'}
             </span>
@@ -254,7 +339,7 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                 {displayWord}
               </h1>
 
-              {/* Collocation picker for review mode */}
+              {/* Collocation picker */}
               {mode === 'review' && validCollocations.length >= 2 && !showContent && (
                 <div className="mb-6">
                   <p className="text-zinc-600 text-xs mb-3">Practice as:</p>
@@ -297,7 +382,9 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
               )}
 
               {mode === 'review' && !showContent && (
-                <p className="text-zinc-500 text-base mb-8 italic">How well do you know this?</p>
+                <p className="text-zinc-500 text-base mb-8 italic">
+                  {isRecognitionMode ? 'Which sentence uses this most accurately?' : 'How well do you know this?'}
+                </p>
               )}
 
               {!showContent ? (
@@ -309,11 +396,28 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                 </button>
               ) : (
                 <div className="space-y-6">
+
+                  {/* Definition + content block */}
                   {mode === 'learn' && (
                     <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-6 text-left">
                       <p className="text-zinc-300 text-lg leading-relaxed mb-4">{currentWord.definition}</p>
-                      {currentWord.example_sentence && (
-                        <p className="text-zinc-500 italic leading-relaxed">"{currentWord.example_sentence}"</p>
+                      {exampleSentences.length > 0 && (
+                        <ul className="space-y-2">
+                          {exampleSentences.map((example, i) => {
+                            const isYours = example.trim().startsWith('[yours] ');
+                            const text = isYours ? example.trim().replace('[yours] ', '') : example.trim();
+                            return (
+                              <li key={i} className={`italic leading-relaxed pl-3 border-l-2 text-sm ${
+                                isYours ? 'border-amber-600/50 text-zinc-300' : 'border-zinc-700 text-zinc-400'
+                              }`}>
+                                "{text}"
+                                {isYours && (
+                                  <span className="not-italic text-xs ml-2 px-1.5 py-0.5 bg-amber-500/20 text-amber-300 rounded">yours</span>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
                       )}
                     </div>
                   )}
@@ -338,28 +442,42 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                           <p className="text-zinc-400 leading-relaxed">{currentWord.context}</p>
                         </div>
                       )}
-                      {currentWord.example_sentence && !isSentence && (
+                      {exampleSentences.length > 0 && !isSentence && (
                         <div>
-                          <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">Example</p>
-                          <p className="text-zinc-400 italic leading-relaxed">"{currentWord.example_sentence}"</p>
+                          <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">Example{exampleSentences.length > 1 ? 's' : ''}</p>
+                          <ul className="space-y-2">
+                            {exampleSentences.map((example, i) => {
+                              const isYours = example.trim().startsWith('[yours] ');
+                              const text = isYours ? example.trim().replace('[yours] ', '') : example.trim();
+                              return (
+                                <li key={i} className={`italic leading-relaxed pl-3 border-l-2 text-sm ${
+                                  isYours ? 'border-amber-600/50 text-zinc-300' : 'border-zinc-700 text-zinc-400'
+                                }`}>
+                                  "{text}"
+                                  {isYours && (
+                                    <span className="not-italic text-xs ml-2 px-1.5 py-0.5 bg-amber-500/20 text-amber-300 rounded">yours</span>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
                         </div>
                       )}
                     </div>
                   )}
 
+                  {/* Learn mode: textarea */}
                   {mode === 'learn' && (
                     <>
                       <div className="text-left">
                         <label className="block text-zinc-400 text-sm mb-3">Use it in a sentence:</label>
                         <textarea
                           value={userSentence}
-                          onChange={(e) => setUserSentence(e.target.value)}
+                          onChange={e => setUserSentence(e.target.value)}
                           placeholder="Write your own sentence..."
                           rows={4}
                           className="w-full px-4 py-3 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-zinc-500 resize-none"
-                          autoFocus
-                          spellCheck
-                          autoCorrect="on"
+                          autoFocus spellCheck autoCorrect="on"
                         />
                       </div>
                       <button
@@ -372,6 +490,7 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                     </>
                   )}
 
+                  {/* Revise mode */}
                   {mode === 'revise' && (
                     <div className="space-y-4">
                       <div className="text-left">
@@ -384,69 +503,240 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                         />
                       </div>
                       <div className="flex gap-3">
-                        <button
-                          onClick={goToNext}
-                          className="flex-1 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors font-medium"
-                        >
-                          Done
-                        </button>
-                        <button
-                          onClick={goToNext}
-                          className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors"
-                        >
-                          Skip
-                        </button>
+                        <button onClick={goToNext} className="flex-1 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors font-medium">Done</button>
+                        <button onClick={goToNext} className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors">Skip</button>
                       </div>
-                      <button
-                        onClick={goToNext}
-                        className="w-full text-zinc-500 hover:text-zinc-400 text-sm transition-colors py-2"
-                      >
-                        Not for me
-                      </button>
+                      <button onClick={goToNext} className="w-full text-zinc-500 hover:text-zinc-400 text-sm transition-colors py-2">Not for me</button>
                     </div>
                   )}
 
-                  {mode === 'review' && (
+                  {/* Review mode: A/B/C recognition (usefulness=1) */}
+                  {mode === 'review' && isRecognitionMode && (
                     <div className="space-y-3">
                       {confirmedRating ? (
                         <p className="text-zinc-500 text-sm text-center py-2">
                           See you in ~{confirmedRating.days} day{confirmedRating.days !== 1 ? 's' : ''}
                         </p>
-                      ) : (
+                      ) : mcLoading ? (
+                        <div className="flex items-center justify-center gap-2 py-8 text-zinc-500">
+                          <Loader2 size={16} className="animate-spin" />
+                          <span className="text-sm">Loading options...</span>
+                        </div>
+                      ) : mcOptions ? (
                         <>
-                          <div className="grid grid-cols-4 gap-2">
-                            {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
-                              <button
-                                key={r}
-                                onClick={() => handleRate(r)}
-                                disabled={savingRating}
-                                className={`py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 capitalize ${
-                                  r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
-                                  r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
-                                  r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
-                                                  'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
-                                }`}
-                              >
-                                {r}
-                              </button>
-                            ))}
+                          {!mcRevealed && (
+                            <p className="text-zinc-500 text-xs text-center mb-4">Which sentence uses "{currentWord.word}" most accurately?</p>
+                          )}
+                          <div className="space-y-2 text-left">
+                            {mcOptions.options.map((opt, i) => {
+                              const label = ['A', 'B', 'C'][i];
+                              const isSelected = selectedOption === i;
+                              const isBest = i === mcOptions.bestIndex;
+                              let cardStyle = 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-500 cursor-pointer';
+                              if (mcRevealed) {
+                                if (isBest) cardStyle = 'border-emerald-600/60 bg-emerald-900/20';
+                                else if (isSelected && !isBest) cardStyle = 'border-rose-700/50 bg-rose-900/10 opacity-60';
+                                else cardStyle = 'border-zinc-800 bg-zinc-800/30 opacity-40';
+                              } else if (isSelected) {
+                                cardStyle = 'border-violet-500/60 bg-violet-900/10';
+                              }
+                              return (
+                                <button
+                                  key={i}
+                                  onClick={() => {
+                                    if (mcRevealed) return;
+                                    setSelectedOption(i);
+                                    setMcRevealed(true);
+                                  }}
+                                  className={`w-full text-left rounded-lg border p-4 transition-all ${cardStyle}`}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <span className={`text-xs font-medium mt-0.5 shrink-0 ${
+                                      mcRevealed && isBest ? 'text-emerald-400' :
+                                      mcRevealed && isSelected && !isBest ? 'text-rose-400' :
+                                      'text-zinc-500'
+                                    }`}>{label}</span>
+                                    <span className="text-sm text-zinc-300 leading-relaxed italic">"{opt}"</span>
+                                    {mcRevealed && isBest && <Check size={14} className="text-emerald-400 shrink-0 mt-0.5 ml-auto" />}
+                                  </div>
+                                </button>
+                              );
+                            })}
                           </div>
-                          <button
-                            onClick={handleSkip}
-                            className="w-full text-zinc-600 hover:text-zinc-400 text-sm transition-colors py-1"
-                          >
-                            Skip
-                          </button>
+                          {mcRevealed && (
+                            <div className="space-y-3 pt-1">
+                              <p className="text-xs text-zinc-500 text-left pl-1">{mcOptions.reason}</p>
+                              <div className="grid grid-cols-4 gap-2">
+                                {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
+                                  <button
+                                    key={r}
+                                    onClick={() => handleRate(r)}
+                                    disabled={savingRating}
+                                    className={`py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 capitalize ${
+                                      r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
+                                      r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
+                                      r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
+                                                      'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
+                                    }`}
+                                  >
+                                    {r}
+                                  </button>
+                                ))}
+                              </div>
+                              <button onClick={handleSkip} className="w-full text-zinc-600 hover:text-zinc-400 text-sm transition-colors py-1">Skip</button>
+                            </div>
+                          )}
                         </>
+                      ) : (
+                        // MC failed — fall through to sentence production below
+                        <ReviewSentenceProduction
+                          word={currentWord}
+                          reviewSentence={reviewSentence}
+                          setReviewSentence={setReviewSentence}
+                          reviewFeedback={reviewFeedback}
+                          reviewEvaluating={reviewEvaluating}
+                          handleReviewSubmit={handleReviewSubmit}
+                          handleRate={handleRate}
+                          handleSkip={handleSkip}
+                          savingRating={savingRating}
+                          confirmedRating={confirmedRating}
+                        />
                       )}
                     </div>
                   )}
+
+                  {/* Review mode: sentence production (usefulness >= 2) */}
+                  {mode === 'review' && !isRecognitionMode && (
+                    <ReviewSentenceProduction
+                      word={currentWord}
+                      reviewSentence={reviewSentence}
+                      setReviewSentence={setReviewSentence}
+                      reviewFeedback={reviewFeedback}
+                      reviewEvaluating={reviewEvaluating}
+                      handleReviewSubmit={handleReviewSubmit}
+                      handleRate={handleRate}
+                      handleSkip={handleSkip}
+                      savingRating={savingRating}
+                      confirmedRating={confirmedRating}
+                    />
+                  )}
+
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Sentence production sub-component (used by review mode for usefulness >= 2, and as MC fallback)
+interface SentenceProductionProps {
+  word: VocabularyWord;
+  reviewSentence: string;
+  setReviewSentence: (s: string) => void;
+  reviewFeedback: Feedback | null;
+  reviewEvaluating: boolean;
+  handleReviewSubmit: () => void;
+  handleRate: (r: Rating) => void;
+  handleSkip: () => void;
+  savingRating: boolean;
+  confirmedRating: { rating: Rating; days: number } | null;
+}
+
+function ReviewSentenceProduction({
+  word, reviewSentence, setReviewSentence, reviewFeedback,
+  reviewEvaluating, handleReviewSubmit, handleRate, handleSkip,
+  savingRating, confirmedRating,
+}: SentenceProductionProps) {
+  return (
+    <div className="space-y-4">
+      {confirmedRating ? (
+        <p className="text-zinc-500 text-sm text-center py-2">
+          See you in ~{confirmedRating.days} day{confirmedRating.days !== 1 ? 's' : ''}
+        </p>
+      ) : !reviewFeedback ? (
+        <>
+          {word.scaffold_prompt && (
+            <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg text-left">
+              <p className="text-amber-200/80 text-sm leading-relaxed">{word.scaffold_prompt}</p>
+            </div>
+          )}
+          <div className="text-left">
+            <textarea
+              value={reviewSentence}
+              onChange={e => setReviewSentence(e.target.value)}
+              placeholder="Write a sentence using this word..."
+              rows={3}
+              className="w-full px-4 py-3 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-violet-600/50 resize-none text-sm"
+              autoFocus spellCheck autoCorrect="on"
+            />
+          </div>
+          <button
+            onClick={handleReviewSubmit}
+            disabled={!reviewSentence.trim() || reviewEvaluating}
+            className="w-full py-3 bg-violet-700/40 hover:bg-violet-700/60 text-violet-200 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-violet-700/40"
+          >
+            {reviewEvaluating ? <><Loader2 size={16} className="animate-spin" />Checking...</> : 'Submit'}
+          </button>
+        </>
+      ) : (
+        <div className="space-y-3 text-left">
+          {/* Feedback */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className={`p-1 rounded-full shrink-0 ${reviewFeedback.correct ? 'bg-emerald-600' : 'bg-rose-600'}`}>
+              {reviewFeedback.correct
+                ? <Check size={12} className="text-white" />
+                : <X size={12} className="text-white" />}
+            </div>
+            <span className="text-xs text-zinc-400">
+              {reviewFeedback.correct ? 'Used correctly.' : 'Check the meaning.'}
+            </span>
+            {reviewFeedback.structureNote && (
+              <span className="text-xs text-zinc-600 italic">— {reviewFeedback.structureNote}</span>
+            )}
+          </div>
+          {reviewFeedback.meaningCorrection && (
+            <p className="text-rose-300 text-xs leading-relaxed">{reviewFeedback.meaningCorrection}</p>
+          )}
+          {reviewFeedback.swaps?.length > 0 && (
+            <div className="bg-zinc-800/40 rounded-lg p-3 text-sm leading-relaxed">
+              {renderSwappedSentence(reviewSentence, reviewFeedback.swaps)}
+            </div>
+          )}
+          {reviewFeedback.swaps?.length > 0 && (
+            <div className="space-y-1.5">
+              {reviewFeedback.swaps.map((swap, i) => (
+                <p key={i} className="text-xs text-zinc-500 flex items-baseline gap-1.5 flex-wrap">
+                  <span className="line-through text-zinc-600 shrink-0">{swap.original}</span>
+                  <span className="text-zinc-300 shrink-0">→ {swap.improved}</span>
+                  <span className="text-zinc-600">— {swap.reason}</span>
+                </p>
+              ))}
+            </div>
+          )}
+          {/* Rating buttons */}
+          <div className="grid grid-cols-4 gap-2 pt-1">
+            {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
+              <button
+                key={r}
+                onClick={() => handleRate(r)}
+                disabled={savingRating}
+                className={`py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 capitalize ${
+                  r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
+                  r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
+                  r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
+                                  'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+          <button onClick={handleSkip} className="w-full text-zinc-600 hover:text-zinc-400 text-sm transition-colors py-1">Skip</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -14,6 +14,7 @@ interface RequestPayload {
   scaffoldOnly?: boolean;
   defineOnly?: boolean;
   shortPhraseOnly?: boolean;
+  multipleChoiceOnly?: boolean;
   locale?: string; // 'en-AU' | 'en-US'
   context?: string;
   previousSentences?: string[];
@@ -38,7 +39,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { word, definition, sentence, mode, scaffoldOnly, defineOnly, shortPhraseOnly, locale, context, previousSentences, targetCollocation, distinctionOnly }: RequestPayload = await req.json();
+    const { word, definition, sentence, mode, scaffoldOnly, defineOnly, shortPhraseOnly, multipleChoiceOnly, locale, context, previousSentences, targetCollocation, distinctionOnly }: RequestPayload = await req.json();
     const isAustralian = locale === 'en-AU' || locale == null; // default to AU
     const spellingNote = isAustralian
       ? `IMPORTANT: Use Australian/British English spelling conventions. Words ending in "-ise", "-our", "-re", "-ogue" (e.g. "commoditised", "organise", "colour", "theatre", "catalogue") are CORRECT spellings — do NOT flag them as misspellings. Only flag something as a misspelling if it is genuinely a typo or an unknown word regardless of variant.`
@@ -100,6 +101,59 @@ Deno.serve(async (req: Request) => {
         }
       } catch { /* fall through */ }
       return new Response(JSON.stringify({ error: "Could not generate short definition" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Multiple choice mode — 3 sentences at different quality levels for recognition practice
+    if (multipleChoiceOnly) {
+      const mcPrompt = `Write 3 sentences using the word "${word}"${definition ? ` (meaning: "${definition}")` : ''}.
+
+The question shown to the learner will be: "Which sentence uses '${word}' most accurately?"
+
+Rules:
+- The word MUST appear in every sentence.
+- Write like a good author who simply needed the word — not like someone constructing an example to teach it. The word appears because it's the right one, not because the sentence was built around it.
+- One "best" sentence: precise and natural — the word earns its place because a simpler synonym would lose something specific. The sentence should feel like it could come from a novel or essay. Something in the word's particular register or nuance should be evident.
+  Examples of the right register:
+  "She was reticent in a way that felt deliberate — answering only what was asked, never once volunteering."
+  "He remained sanguine about the diagnosis in a way that unnerved the doctors more than despair would have."
+  "She was fastidious about sound — a dripping tap three rooms away was enough to keep her up."
+- One "ok" sentence: grammatically correct, word used validly, but generic — a simpler synonym (honest, fleeting, thorough) would do the same job with no loss.
+- One "weak/wrong" sentence: either a common misuse (wrong word — e.g. reticent where 'reluctant' belongs, disinterested where 'uninterested' belongs) OR the word applied to a context that doesn't fit (e.g. sanguine describing a room's atmosphere rather than a person's disposition).
+
+The best sentence should NOT always be the longest. No over-written prose. No fake attributions.
+Randomise the order — bestIndex must not always be 0.
+
+Return ONLY a JSON object:
+{"options": ["sentence 1", "sentence 2", "sentence 3"], "bestIndex": 0, "reason": "one crisp phrase under 12 words — what makes the best one earn the word"}`;
+
+      const mcResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "user", content: mcPrompt }],
+          max_tokens: 400,
+          temperature: 0.7,
+        }),
+      });
+      const mcData = await mcResponse.json();
+      const mcContent = mcData.choices?.[0]?.message?.content || "";
+      try {
+        const jsonMatch = mcContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed.options) && parsed.options.length === 3 && typeof parsed.bestIndex === 'number') {
+            return new Response(JSON.stringify({
+              options: parsed.options,
+              bestIndex: parsed.bestIndex,
+              reason: parsed.reason ?? '',
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        }
+      } catch { /* fall through */ }
+      return new Response(JSON.stringify({ error: "Could not generate multiple choice options" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
