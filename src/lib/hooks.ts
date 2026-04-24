@@ -66,6 +66,8 @@ const DB_UPDATE_FIELDS = new Set([
   'user_sentences', 'added_date', 'is_public', 'is_archived', 'is_conversational',
   'collocations',
   'distinction',
+  'next_review_at',
+  'usefulness',
 ]);
 
 function sanitizeUpdates(updates: Partial<VocabularyWord>): Record<string, unknown> {

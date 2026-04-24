@@ -89,6 +89,10 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [mcRevealed, setMcRevealed] = useState(false);
 
+  // Review mode: dynamic collocation scaffold
+  const [collocationScaffold, setCollocationScaffold] = useState<string | null>(null);
+  const [collocationScaffoldLoading, setCollocationScaffoldLoading] = useState(false);
+
   const now = useMemo(() => new Date(), []);
 
   const reviewWords = useMemo(() => {
@@ -166,7 +170,32 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
     setMcLoading(false);
     setSelectedOption(null);
     setMcRevealed(false);
+    setCollocationScaffold(null);
+    setCollocationScaffoldLoading(false);
   }, [currentIndex]);
+
+  // Generate collocation-specific scaffold when a collocation is picked
+  useEffect(() => {
+    if (!selectedCollocation || !currentWord) return;
+    setCollocationScaffold(null);
+    setCollocationScaffoldLoading(true);
+    const collocPair = currentWord.collocations?.pairs?.find(
+      p => p.phrase === selectedCollocation
+    );
+    callEdgeFunction<{ scaffoldPrompt: string }>('enrich-word', {
+      word: currentWord.word,
+      definition: currentWord.definition,
+      context: currentWord.context,
+      scaffoldOnly: true,
+      targetCollocation: { phrase: selectedCollocation, note: collocPair?.note },
+    }).then(data => {
+      if (data?.scaffoldPrompt) setCollocationScaffold(data.scaffoldPrompt);
+    }).catch(() => {
+      // fall back to generic scaffold silently
+    }).finally(() => {
+      setCollocationScaffoldLoading(false);
+    });
+  }, [selectedCollocation, currentWord]);
 
   // Load MC options when content is shown for usefulness=1 words in review mode
   useEffect(() => {
@@ -595,6 +624,9 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                         // MC failed — fall through to sentence production below
                         <ReviewSentenceProduction
                           word={currentWord}
+                          selectedCollocation={selectedCollocation}
+                          collocationScaffold={collocationScaffold}
+                          collocationScaffoldLoading={collocationScaffoldLoading}
                           reviewSentence={reviewSentence}
                           setReviewSentence={setReviewSentence}
                           reviewFeedback={reviewFeedback}
@@ -614,6 +646,9 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                   {mode === 'review' && !isRecognitionMode && (
                     <ReviewSentenceProduction
                       word={currentWord}
+                      selectedCollocation={selectedCollocation}
+                      collocationScaffold={collocationScaffold}
+                      collocationScaffoldLoading={collocationScaffoldLoading}
                       reviewSentence={reviewSentence}
                       setReviewSentence={setReviewSentence}
                       reviewFeedback={reviewFeedback}
@@ -640,6 +675,9 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
 // ── Sentence production sub-component (used by review mode for usefulness >= 2, and as MC fallback)
 interface SentenceProductionProps {
   word: VocabularyWord;
+  selectedCollocation: string | null;
+  collocationScaffold: string | null;
+  collocationScaffoldLoading: boolean;
   reviewSentence: string;
   setReviewSentence: (s: string) => void;
   reviewFeedback: Feedback | null;
@@ -653,7 +691,8 @@ interface SentenceProductionProps {
 }
 
 function ReviewSentenceProduction({
-  word, reviewSentence, setReviewSentence, reviewFeedback,
+  word, selectedCollocation, collocationScaffold, collocationScaffoldLoading,
+  reviewSentence, setReviewSentence, reviewFeedback,
   reviewEvaluating, handleReviewSubmit, handleRate, handleSkip, handleTryAgain,
   savingRating, confirmedRating,
 }: SentenceProductionProps) {
@@ -665,16 +704,30 @@ function ReviewSentenceProduction({
         </p>
       ) : !reviewFeedback ? (
         <>
-          {word.scaffold_prompt && (
+          {/* Scaffold: prefer live collocation scaffold, then stored scaffold */}
+          {selectedCollocation ? (
+            <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg text-left">
+              {collocationScaffoldLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin text-amber-400" />
+                  <p className="text-amber-200/60 text-sm">Generating a prompt...</p>
+                </div>
+              ) : (
+                <p className="text-amber-200/80 text-sm leading-relaxed">
+                  {collocationScaffold ?? `Try using '${selectedCollocation}' in a sentence.`}
+                </p>
+              )}
+            </div>
+          ) : word.scaffold_prompt ? (
             <div className="p-4 bg-amber-900/10 border border-amber-800/20 rounded-lg text-left">
               <p className="text-amber-200/80 text-sm leading-relaxed">{word.scaffold_prompt}</p>
             </div>
-          )}
+          ) : null}
           <div className="text-left">
             <textarea
               value={reviewSentence}
               onChange={e => setReviewSentence(e.target.value)}
-              placeholder="Write a sentence using this word..."
+              placeholder={selectedCollocation ? `${selectedCollocation}...` : 'Write a sentence using this word...'}
               rows={3}
               className="w-full px-4 py-3 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-violet-600/50 resize-none text-sm"
               autoFocus spellCheck autoCorrect="on"
