@@ -125,7 +125,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
   // Auto-clean any stored "Unable to generate examples." error strings from example_sentence
   // Also reset distinction expanded state when the word changes
   useEffect(() => {
-    setDistinctionExpanded(!!localWord.distinction);
+    setDistinctionExpanded(false); // always start collapsed — user can expand on demand
     if (!localWord.example_sentence) return;
     if (!localWord.example_sentence.includes('Unable to generate')) return;
     const cleaned = localWord.example_sentence
