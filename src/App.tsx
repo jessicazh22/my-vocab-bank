@@ -6,7 +6,9 @@ import QuickAdd from './components/QuickAdd';
 import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
 import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
-import { Plus, Play, LogOut, Zap, Settings, BookOpenCheck } from 'lucide-react';
+import { Plus, LogOut, Settings, BookOpenCheck } from 'lucide-react';
+// Hidden imports (This week + Practice — hidden from UI, keep for potential restoration)
+// import { Play, Zap } from 'lucide-react';
 
 // --- Weekly state helpers ---
 const WEEKLY_KEY = 'weekly-challenge';
@@ -181,6 +183,7 @@ function App() {
             <h1 className="text-2xl font-light text-zinc-100">Vocabulary</h1>
 
             <div className="flex items-center gap-3">
+              {/* "This week" button hidden — not in use (added 2026-04-24, ask to delete after ~1 week)
               {words.length > 0 && (
                 <button
                   onClick={handleWeeklyButtonClick}
@@ -199,6 +202,7 @@ function App() {
                   )}
                 </button>
               )}
+              */}
 
               {!isReadOnly && words.length > 0 && (
                 <button
@@ -219,6 +223,7 @@ function App() {
                 </button>
               )}
 
+              {/* "Practice" button hidden — not in use (added 2026-04-24, ask to delete after ~1 week)
               {!isReadOnly && totalReviewable > 0 && (
                 <button
                   onClick={() => setShowModeSelector(true)}
@@ -228,6 +233,7 @@ function App() {
                   Practice
                 </button>
               )}
+              */}
 
               {!isReadOnly && (
                 <button
@@ -325,6 +331,7 @@ function App() {
         )}
       </main>
 
+      {/* WeeklyReview hidden — not in use (added 2026-04-24, ask to delete after ~1 week)
       {weeklyView === 'review' && (
         <WeeklyReview
           selectedWords={weeklySelectedWords}
@@ -334,8 +341,11 @@ function App() {
           onClose={() => setWeeklyView('off')}
         />
       )}
+      */}
 
       {showQuickAdd && <QuickAdd onClose={() => setShowQuickAdd(false)} addWord={addWord} checkDuplicate={checkDuplicate} locale={locale} />}
+
+      {/* Practice mode selector + learn/revise modes hidden — not in use (added 2026-04-24, ask to delete after ~1 week)
       {showModeSelector && (
         <ReviewModeSelector
           learnCount={learnWords.length}
@@ -347,6 +357,7 @@ function App() {
       )}
       {showLearn && <ReviewMode words={words} mode="learn" onClose={() => setShowLearn(false)} practiceWord={practiceWord} />}
       {showRevise && <ReviewMode words={words} mode="revise" onClose={() => setShowRevise(false)} practiceWord={practiceWord} />}
+      */}
       {showReview && <ReviewMode words={words} mode="review" onClose={() => setShowReview(false)} practiceWord={practiceWord} />}
     </div>
   );
