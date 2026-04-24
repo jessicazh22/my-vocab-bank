@@ -283,6 +283,10 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
 
   const handleSkip = () => goToNext();
 
+  const handleReviewTryAgain = () => {
+    setReviewFeedback(null);
+  };
+
   const handleReviewSubmit = async () => {
     if (!reviewSentence.trim()) return;
     setReviewEvaluating(true);
@@ -566,13 +570,13 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                           {mcRevealed && (
                             <div className="space-y-3 pt-1">
                               <p className="text-xs text-zinc-500 text-left pl-1">{mcOptions.reason}</p>
-                              <div className="grid grid-cols-4 gap-2">
+                              <div className="grid grid-cols-4 gap-1.5">
                                 {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
                                   <button
                                     key={r}
                                     onClick={() => handleRate(r)}
                                     disabled={savingRating}
-                                    className={`py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 capitalize ${
+                                    className={`py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 capitalize ${
                                       r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
                                       r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
                                       r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
@@ -583,7 +587,7 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                                   </button>
                                 ))}
                               </div>
-                              <button onClick={handleSkip} className="w-full text-zinc-600 hover:text-zinc-400 text-sm transition-colors py-1">Skip</button>
+                              <button onClick={handleSkip} className="w-full text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1">Skip</button>
                             </div>
                           )}
                         </>
@@ -598,6 +602,7 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                           handleReviewSubmit={handleReviewSubmit}
                           handleRate={handleRate}
                           handleSkip={handleSkip}
+                          handleTryAgain={handleReviewTryAgain}
                           savingRating={savingRating}
                           confirmedRating={confirmedRating}
                         />
@@ -616,6 +621,7 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                       handleReviewSubmit={handleReviewSubmit}
                       handleRate={handleRate}
                       handleSkip={handleSkip}
+                      handleTryAgain={handleReviewTryAgain}
                       savingRating={savingRating}
                       confirmedRating={confirmedRating}
                     />
@@ -641,13 +647,14 @@ interface SentenceProductionProps {
   handleReviewSubmit: () => void;
   handleRate: (r: Rating) => void;
   handleSkip: () => void;
+  handleTryAgain: () => void;
   savingRating: boolean;
   confirmedRating: { rating: Rating; days: number } | null;
 }
 
 function ReviewSentenceProduction({
   word, reviewSentence, setReviewSentence, reviewFeedback,
-  reviewEvaluating, handleReviewSubmit, handleRate, handleSkip,
+  reviewEvaluating, handleReviewSubmit, handleRate, handleSkip, handleTryAgain,
   savingRating, confirmedRating,
 }: SentenceProductionProps) {
   return (
@@ -717,13 +724,13 @@ function ReviewSentenceProduction({
             </div>
           )}
           {/* Rating buttons */}
-          <div className="grid grid-cols-4 gap-2 pt-1">
+          <div className="grid grid-cols-4 gap-1.5 pt-1">
             {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
               <button
                 key={r}
                 onClick={() => handleRate(r)}
                 disabled={savingRating}
-                className={`py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 capitalize ${
+                className={`py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 capitalize ${
                   r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
                   r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
                   r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
@@ -734,7 +741,10 @@ function ReviewSentenceProduction({
               </button>
             ))}
           </div>
-          <button onClick={handleSkip} className="w-full text-zinc-600 hover:text-zinc-400 text-sm transition-colors py-1">Skip</button>
+          <div className="flex items-center justify-between pt-0.5">
+            <button onClick={handleTryAgain} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1">Edit & resubmit</button>
+            <button onClick={handleSkip} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1">Skip</button>
+          </div>
         </div>
       )}
     </div>
