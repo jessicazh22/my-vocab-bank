@@ -19,12 +19,29 @@ function extractSynonym(distinction: string, word: string): string | null {
   return null;
 }
 
+type Rating = 'again' | 'hard' | 'good' | 'easy';
+type Usefulness = 1 | 2 | 3 | 4;
+
+const RATING_DAYS: Record<Rating, number> = { again: 1, hard: 3, good: 7, easy: 21 };
+const USEFULNESS_MULT: Record<Usefulness, number> = { 1: 1.5, 2: 1.0, 3: 0.7, 4: 2.5 };
+const USEFULNESS_LABELS: Record<Usefulness, string> = {
+  1: 'Just know it',
+  2: 'Sometimes',
+  3: 'In the right context',
+  4: 'Know it very well',
+};
+
+function computeDays(rating: Rating, usefulness: Usefulness): number {
+  return Math.round(RATING_DAYS[rating] * USEFULNESS_MULT[usefulness]);
+}
+
 interface WordDetailProps {
   word: VocabularyWord;
   onClose: () => void;
   onWordUpdate?: () => void;
   updateWord: (id: string, updates: Partial<VocabularyWord>) => Promise<void>;
-  practiceWord: (id: string, userSentence: string) => Promise<void>;
+  practiceWord: (id: string, userSentence: string, rating?: Rating, usefulness?: Usefulness) => Promise<void>;
+  setReviewDate?: (id: string, next_review_at: string | null) => Promise<void>;
   isReadOnly?: boolean;
 }
 
@@ -77,7 +94,7 @@ function renderSwappedSentence(sentence: string, swaps: Swap[]) {
   );
 }
 
-export default function WordDetail({ word, onClose, onWordUpdate, updateWord, practiceWord, isReadOnly = false }: WordDetailProps) {
+export default function WordDetail({ word, onClose, onWordUpdate, updateWord, practiceWord, setReviewDate, isReadOnly = false }: WordDetailProps) {
   const [learningMode, setLearningMode] = useState(false);
   const [showCard, setShowCard] = useState(true);
   const [userSentence, setUserSentence] = useState('');
@@ -95,6 +112,11 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
   const [collocationScaffoldLoading, setCollocationScaffoldLoading] = useState(false);
   const [distinctionRegenerating, setDistinctionRegenerating] = useState(false);
   const [distinctionExpanded, setDistinctionExpanded] = useState(false);
+  // Spaced repetition state
+  const [pendingRating, setPendingRating] = useState<Rating | null>(null);
+  const [showUsefulnessPicker, setShowUsefulnessPicker] = useState(false);
+  const [confirmedDays, setConfirmedDays] = useState<number | null>(null);
+  const [savingRating, setSavingRating] = useState(false);
 
   useEffect(() => {
     setLocalWord(word);
@@ -234,6 +256,10 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
     setFeedback(null);
     setTargetCollocation(null);
     setCollocationScaffold(null);
+    setPendingRating(null);
+    setShowUsefulnessPicker(false);
+    setConfirmedDays(null);
+    setSavingRating(false);
   };
 
   const handleRegenerateDistinction = async () => {
@@ -284,6 +310,41 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
   const handleTryAgain = () => {
     setFeedback(null);
     // Keep the sentence so the user can edit rather than retype
+  };
+
+  const handleRate = async (rating: Rating) => {
+    setPendingRating(rating);
+    const usefulness = (localWord.usefulness ?? 2) as Usefulness;
+    const days = computeDays(rating, usefulness);
+    setConfirmedDays(days);
+
+    // If this is the very first practice, show usefulness picker before closing
+    if (localWord.practice_count === 0) {
+      setShowUsefulnessPicker(true);
+      // Save practice + rating now (usefulness will be updated in handleUsefulness)
+      setSavingRating(true);
+      await practiceWord(word.id, userSentence, rating);
+      setLocalWord(prev => ({ ...prev, practice_count: prev.practice_count + 1 }));
+      setSavingRating(false);
+      onWordUpdate?.();
+    } else {
+      setSavingRating(true);
+      await practiceWord(word.id, userSentence, rating);
+      setSavingRating(false);
+      onWordUpdate?.();
+      setTimeout(() => handleExitLearning(), 1200);
+    }
+  };
+
+  const handleUsefulness = async (usefulness: Usefulness) => {
+    // Update usefulness and recalculate next_review_at with it
+    const rating = pendingRating!;
+    const days = computeDays(rating, usefulness);
+    setConfirmedDays(days);
+    await practiceWord(word.id, '', rating, usefulness);
+    setLocalWord(prev => ({ ...prev, usefulness }));
+    onWordUpdate?.();
+    setTimeout(() => handleExitLearning(), 1200);
   };
 
   const handleEnrich = async () => {
@@ -529,20 +590,67 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                       )}
 
                       {/* Action buttons */}
-                      <div className="flex gap-3 pt-1">
-                        <button
-                          onClick={handleTryAgain}
-                          className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-sm font-medium"
-                        >
-                          Edit & resubmit
-                        </button>
-                        <button
-                          onClick={handleExitLearning}
-                          className="flex-1 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded-lg transition-colors text-sm font-medium"
-                        >
-                          Done
-                        </button>
-                      </div>
+                      {showUsefulnessPicker ? (
+                        <div className="space-y-3 pt-1">
+                          <div>
+                            <p className="text-xs text-zinc-400 mb-2">
+                              Would you actually say{' '}
+                              {localWord.collocations?.pairs?.filter(p =>
+                                p.phrase.toLowerCase().includes(localWord.word.toLowerCase())
+                              )[0]?.phrase
+                                ? <span className="text-zinc-200 italic">"{localWord.collocations!.pairs.filter(p => p.phrase.toLowerCase().includes(localWord.word.toLowerCase()))[0].phrase}"</span>
+                                : <span className="text-zinc-200 italic">"{localWord.word}"</span>
+                              }?
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {([1, 2, 3, 4] as Usefulness[]).map(u => (
+                                <button
+                                  key={u}
+                                  onClick={() => handleUsefulness(u)}
+                                  className="py-2 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition-colors text-left border border-zinc-700 hover:border-zinc-500"
+                                >
+                                  {USEFULNESS_LABELS[u]}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {confirmedDays !== null && (
+                            <p className="text-xs text-zinc-500 text-center">
+                              See you in ~{confirmedDays} day{confirmedDays !== 1 ? 's' : ''}
+                            </p>
+                          )}
+                        </div>
+                      ) : confirmedDays !== null ? (
+                        <p className="text-xs text-zinc-500 text-center pt-1">
+                          See you in ~{confirmedDays} day{confirmedDays !== 1 ? 's' : ''}
+                        </p>
+                      ) : (
+                        <div className="space-y-2 pt-1">
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
+                              <button
+                                key={r}
+                                onClick={() => handleRate(r)}
+                                disabled={savingRating}
+                                className={`py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 capitalize ${
+                                  r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
+                                  r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
+                                  r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
+                                                  'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
+                                }`}
+                              >
+                                {r}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            onClick={handleTryAgain}
+                            className="w-full text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1"
+                          >
+                            Edit & resubmit
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -821,6 +929,55 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                   </span>
                 );
               })()}
+            </div>
+          )}
+
+          {/* Usefulness toggle — always editable */}
+          {!isReadOnly && (
+            <div className="pt-4 border-t border-zinc-800 space-y-3">
+              <div className="flex flex-wrap gap-1.5">
+                {([1, 2, 3, 4] as Usefulness[]).map(u => (
+                  <button
+                    key={u}
+                    onClick={async () => {
+                      setLocalWord(prev => ({ ...prev, usefulness: u }));
+                      await updateWord(word.id, { usefulness: u });
+                      onWordUpdate?.();
+                    }}
+                    className={`px-2.5 py-1 rounded-md text-xs transition-colors border ${
+                      (localWord.usefulness ?? 2) === u
+                        ? 'bg-zinc-700 text-zinc-100 border-zinc-500'
+                        : 'bg-transparent text-zinc-600 border-zinc-800 hover:text-zinc-400 hover:border-zinc-600'
+                    }`}
+                  >
+                    {USEFULNESS_LABELS[u]}
+                  </button>
+                ))}
+              </div>
+              {/* Add to review queue / next due date */}
+              {setReviewDate && (
+                localWord.next_review_at ? (
+                  <p className="text-xs text-zinc-600">
+                    Due {new Date(localWord.next_review_at) <= new Date()
+                      ? 'now'
+                      : `${Math.ceil((new Date(localWord.next_review_at).getTime() - Date.now()) / 86400000)} day${
+                          Math.ceil((new Date(localWord.next_review_at).getTime() - Date.now()) / 86400000) !== 1 ? 's' : ''
+                        }`}
+                  </p>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      const now = new Date().toISOString();
+                      setLocalWord(prev => ({ ...prev, next_review_at: now }));
+                      await setReviewDate(word.id, now);
+                      onWordUpdate?.();
+                    }}
+                    className="text-xs text-zinc-600 hover:text-amber-400 transition-colors"
+                  >
+                    + Add to review queue
+                  </button>
+                )
+              )}
             </div>
           )}
 

@@ -14,12 +14,19 @@ interface WordBankProps {
   archiveWord: (id: string) => Promise<void>;
   unarchiveWord: (id: string) => Promise<void>;
   bulkArchiveWords: (ids: string[]) => Promise<void>;
-  practiceWord: (id: string, userSentence: string) => Promise<void>;
+  practiceWord: (id: string, userSentence: string, rating?: 'again' | 'hard' | 'good' | 'easy', usefulness?: 1 | 2 | 3 | 4) => Promise<void>;
+  setReviewDate?: (id: string, next_review_at: string | null) => Promise<void>;
   isReadOnly?: boolean;
   weeklyMode?: boolean;
   weeklySelected?: string[];
   onToggleWeeklySelect?: (id: string) => void;
   onWeeklyClose?: () => void;
+  // Queue selection mode
+  queueSelectMode?: boolean;
+  queueSelected?: string[];
+  onToggleQueueSelect?: (id: string) => void;
+  onQueueSelectConfirm?: (ids: string[]) => void;
+  onQueueSelectClose?: () => void;
 }
 
 interface ContextMenuState {
@@ -41,16 +48,31 @@ function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> 
   return { category: 'KNOW_WELL' };
 }
 
-export default function WordBank({ words, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord, isReadOnly = false, weeklyMode = false, weeklySelected = [], onToggleWeeklySelect, onWeeklyClose }: WordBankProps) {
+export default function WordBank({ words, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord, setReviewDate, isReadOnly = false, weeklyMode = false, weeklySelected = [], onToggleWeeklySelect, onWeeklyClose, queueSelectMode = false, queueSelected = [], onToggleQueueSelect, onQueueSelectConfirm, onQueueSelectClose }: WordBankProps) {
   const toggleWeeklySelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleWeeklySelect?.(id);
+  };
+
+  const toggleQueueSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleQueueSelect?.(id);
+  };
+
+  // Also allow clearing via __clear__ sentinel
+  const handleQueueToggle = (id: string) => {
+    onToggleQueueSelect?.(id);
   };
 
   // When weeklyMode activates, jump to Use More Often section
   useEffect(() => {
     if (weeklyMode) setActiveNavSection('NEED_TO_USE');
   }, [weeklyMode]);
+
+  // When queueSelectMode activates, jump to Need to Learn section
+  useEffect(() => {
+    if (queueSelectMode) setActiveNavSection('NEED_TO_LEARN');
+  }, [queueSelectMode]);
 
   const [activeSection, setActiveSection] = useState<'words' | 'sentences' | 'archive'>('words');
   const [activeNavSection, setActiveNavSection] = useState<NavSection>('NEED_TO_LEARN');
@@ -207,26 +229,45 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
     const isNeedToUse = section === 'NEED_TO_USE';
     const isWeeklySelected = weeklySelected.includes(word.id);
     const isBulkSelected = bulkArchiveSelected.has(word.id);
+    const isQueueSelected = queueSelected.includes(word.id);
+    const anySelectMode = weeklyMode || bulkArchiveMode || queueSelectMode;
 
     return (
       <div
         key={word.id}
-        draggable={!isReadOnly && !weeklyMode && !bulkArchiveMode}
-        onDragStart={!isReadOnly && !weeklyMode && !bulkArchiveMode ? (e) => handleDragStart(e, word.id) : undefined}
-        onClick={weeklyMode ? (e) => toggleWeeklySelect(word.id, e) : bulkArchiveMode ? () => toggleBulkArchiveSelect(word.id) : () => setSelectedWord(word)}
-        onContextMenu={!isReadOnly && !weeklyMode && !bulkArchiveMode ? (e) => handleContextMenu(e, word.id) : undefined}
+        draggable={!isReadOnly && !anySelectMode}
+        onDragStart={!isReadOnly && !anySelectMode ? (e) => handleDragStart(e, word.id) : undefined}
+        onClick={
+          queueSelectMode ? (e) => toggleQueueSelect(word.id, e) :
+          weeklyMode ? (e) => toggleWeeklySelect(word.id, e) :
+          bulkArchiveMode ? () => toggleBulkArchiveSelect(word.id) :
+          () => setSelectedWord(word)
+        }
+        onContextMenu={!isReadOnly && !anySelectMode ? (e) => handleContextMenu(e, word.id) : undefined}
         className={`group relative bg-zinc-800/50 border rounded-lg p-4 transition-all cursor-pointer ${
-          weeklyMode
-            ? isWeeklySelected
-              ? 'border-amber-500/60 bg-amber-500/5 ring-1 ring-amber-500/30'
-              : 'border-zinc-700/50 hover:border-amber-500/30'
-            : bulkArchiveMode
-              ? isBulkSelected
-                ? 'border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30'
-                : 'border-zinc-700/50 hover:border-red-500/30'
-              : (NAV_SECTIONS.find(s => s.key === section)?.cardGlow ?? 'border-zinc-700/50 hover:border-zinc-600')
-        } ${!isReadOnly && !weeklyMode && !bulkArchiveMode ? 'cursor-grab active:cursor-grabbing' : ''} ${isCelebrating ? 'animate-celebrate' : ''} ${isExiting ? 'animate-card-exit' : 'animate-card-enter'}`}
+          queueSelectMode
+            ? isQueueSelected
+              ? 'border-violet-500/60 bg-violet-500/5 ring-1 ring-violet-500/30'
+              : 'border-zinc-700/50 hover:border-violet-500/30'
+            : weeklyMode
+              ? isWeeklySelected
+                ? 'border-amber-500/60 bg-amber-500/5 ring-1 ring-amber-500/30'
+                : 'border-zinc-700/50 hover:border-amber-500/30'
+              : bulkArchiveMode
+                ? isBulkSelected
+                  ? 'border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30'
+                  : 'border-zinc-700/50 hover:border-red-500/30'
+                : (NAV_SECTIONS.find(s => s.key === section)?.cardGlow ?? 'border-zinc-700/50 hover:border-zinc-600')
+        } ${!isReadOnly && !anySelectMode ? 'cursor-grab active:cursor-grabbing' : ''} ${isCelebrating ? 'animate-celebrate' : ''} ${isExiting ? 'animate-card-exit' : 'animate-card-enter'}`}
       >
+        {queueSelectMode && (
+          <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+            isQueueSelected ? 'bg-violet-500 border-violet-500' : 'border-zinc-600'
+          }`}>
+            {isQueueSelected && <Check size={11} className="text-zinc-900" />}
+          </div>
+        )}
+
         {weeklyMode && (
           <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
             isWeeklySelected ? 'bg-amber-500 border-amber-500' : 'border-zinc-600'
@@ -243,7 +284,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
           </div>
         )}
 
-        {!isReadOnly && !weeklyMode && !bulkArchiveMode && (
+        {!isReadOnly && !anySelectMode && (
           <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
             <button
               onClick={(e) => handleQuickArchive(e, word.id)}
@@ -565,7 +606,12 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
           onClose={() => setSelectedWord(null)}
           updateWord={updateWord}
           practiceWord={practiceWord}
+          setReviewDate={setReviewDate}
           isReadOnly={isReadOnly}
+          onWordUpdate={() => {
+            const updated = words.find(w => w.id === selectedWord.id);
+            if (updated) setSelectedWord(updated);
+          }}
         />
       )}
 
@@ -623,6 +669,37 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
               <button onClick={onWeeklyClose} className="text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors">
                 Done
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {queueSelectMode && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 shadow-2xl max-w-sm w-full mx-4">
+          <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
+            Choose words to add to your review queue. <span className="text-zinc-500">They'll be due immediately.</span>
+          </p>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-300">
+              {queueSelected.length === 0 ? 'None selected yet' : `${queueSelected.length} word${queueSelected.length === 1 ? '' : 's'} selected`}
+            </span>
+            <div className="flex items-center gap-3">
+              {queueSelected.length > 0 && (
+                <button onClick={() => onToggleQueueSelect?.('__clear__')} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+                  Clear
+                </button>
+              )}
+              <button onClick={onQueueSelectClose} className="text-xs text-zinc-500 hover:text-zinc-400 transition-colors">
+                Cancel
+              </button>
+              {queueSelected.length > 0 && (
+                <button
+                  onClick={() => onQueueSelectConfirm?.(queueSelected)}
+                  className="text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors"
+                >
+                  Add to queue
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -41,6 +41,8 @@ export type VocabularyWord = {
   is_archived: boolean;
   collocations?: CollocationsData;
   distinction?: string;
+  next_review_at?: string;
+  usefulness: 1 | 2 | 3 | 4;
   created_at: string;
   updated_at: string;
 };

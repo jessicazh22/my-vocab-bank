@@ -6,7 +6,7 @@ import QuickAdd from './components/QuickAdd';
 import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
 import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
-import { Plus, Play, LogOut, Zap, Settings } from 'lucide-react';
+import { Plus, Play, LogOut, Zap, Settings, BookOpenCheck } from 'lucide-react';
 
 // --- Weekly state helpers ---
 const WEEKLY_KEY = 'weekly-challenge';
@@ -51,12 +51,15 @@ function saveWeeklyState(state: WeeklyState) {
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { words, loading: wordsLoading, addWord, checkDuplicate, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord } = useVocabulary();
+  const { words, loading: wordsLoading, addWord, checkDuplicate, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord, setReviewDate } = useVocabulary();
   const { locale, setLocale } = useLocale();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showLearn, setShowLearn] = useState(false);
   const [showRevise, setShowRevise] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+  const [showQueueSelect, setShowQueueSelect] = useState(false);
+  const [queueSelected, setQueueSelected] = useState<string[]>([]);
   const [showAuth, setShowAuth] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -112,6 +115,29 @@ function App() {
     });
   };
 
+  // Queue selection handlers
+  const handleToggleQueueSelect = (id: string) => {
+    if (id === '__clear__') { setQueueSelected([]); return; }
+    setQueueSelected(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleQueueSelectConfirm = async (ids: string[]) => {
+    const now = new Date().toISOString();
+    await Promise.all(ids.map(id => setReviewDate(id, now)));
+    setQueueSelected([]);
+    setShowQueueSelect(false);
+  };
+
+  const handleReviewButtonClick = () => {
+    if (queuedWords.length === 0) {
+      setShowQueueSelect(true);
+    } else {
+      setShowReview(true);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-zinc-900 flex items-center justify-center">
@@ -133,6 +159,14 @@ function App() {
     (w) => w.word_type === 'sentence' || w.familiarity === 'NEED_TO_USE'
   );
   const totalReviewable = learnWords.length + reviseItems.length;
+
+  const now = new Date();
+  const dueWords = words.filter(w =>
+    !w.is_archived && w.next_review_at && new Date(w.next_review_at) <= now
+  );
+  const queuedWords = words.filter(w =>
+    !w.is_archived && w.next_review_at != null
+  );
 
   const weeklySelectedWords = words.filter(w => weeklyState.selected.includes(w.id));
   const hasWeeklyWords = weeklyState.selected.length > 0;
@@ -166,13 +200,32 @@ function App() {
                 </button>
               )}
 
+              {!isReadOnly && words.length > 0 && (
+                <button
+                  onClick={handleReviewButtonClick}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    dueWords.length > 0
+                      ? 'bg-violet-900/40 hover:bg-violet-900/60 text-violet-300 border border-violet-800/50'
+                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400'
+                  }`}
+                >
+                  <BookOpenCheck size={18} />
+                  Review
+                  {dueWords.length > 0 && (
+                    <span className="w-5 h-5 rounded-full bg-violet-500 text-zinc-900 text-[10px] font-bold flex items-center justify-center">
+                      {dueWords.length}
+                    </span>
+                  )}
+                </button>
+              )}
+
               {!isReadOnly && totalReviewable > 0 && (
                 <button
                   onClick={() => setShowModeSelector(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg transition-colors"
                 >
                   <Play size={18} />
-                  Review
+                  Practice
                 </button>
               )}
 
@@ -255,6 +308,7 @@ function App() {
             unarchiveWord={unarchiveWord}
             bulkArchiveWords={bulkArchiveWords}
             practiceWord={practiceWord}
+            setReviewDate={setReviewDate}
             isReadOnly={isReadOnly}
             weeklyMode={weeklyView === 'select'}
             weeklySelected={weeklyState.selected}
@@ -262,6 +316,11 @@ function App() {
             onWeeklyClose={() => {
               setWeeklyView(weeklyState.selected.length > 0 ? 'review' : 'off');
             }}
+            queueSelectMode={showQueueSelect}
+            queueSelected={queueSelected}
+            onToggleQueueSelect={handleToggleQueueSelect}
+            onQueueSelectConfirm={handleQueueSelectConfirm}
+            onQueueSelectClose={() => { setShowQueueSelect(false); setQueueSelected([]); }}
           />
         )}
       </main>
@@ -288,6 +347,7 @@ function App() {
       )}
       {showLearn && <ReviewMode words={words} mode="learn" onClose={() => setShowLearn(false)} practiceWord={practiceWord} />}
       {showRevise && <ReviewMode words={words} mode="revise" onClose={() => setShowRevise(false)} practiceWord={practiceWord} />}
+      {showReview && <ReviewMode words={words} mode="review" onClose={() => setShowReview(false)} practiceWord={practiceWord} />}
     </div>
   );
 }

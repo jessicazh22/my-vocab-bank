@@ -252,25 +252,56 @@ export function useVocabulary() {
     setTimeout(() => ids.forEach(id => savingRef.current.delete(id)), 2000);
   };
 
-  const practiceWord = async (id: string, userSentence: string) => {
+  const BASE_DAYS: Record<string, number> = { again: 1, hard: 3, good: 7, easy: 21 };
+  const USEFULNESS_MULT: Record<number, number> = { 1: 1.5, 2: 1.0, 3: 0.7, 4: 2.5 };
+
+  const computeNextReviewAt = (rating: string, usefulness: number): string => {
+    const days = BASE_DAYS[rating] * (USEFULNESS_MULT[usefulness] ?? 1.0);
+    const d = new Date();
+    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+    return d.toISOString();
+  };
+
+  const practiceWord = async (
+    id: string,
+    userSentence: string,
+    rating?: 'again' | 'hard' | 'good' | 'easy',
+    usefulness?: 1 | 2 | 3 | 4,
+  ) => {
     const word = words.find((w) => w.id === id);
     if (!word) return;
 
-    const newPracticeCount = word.practice_count + 1;
-    const newUserSentences = [...word.user_sentences, userSentence];
+    const newPracticeCount = userSentence ? word.practice_count + 1 : word.practice_count;
+    const newUserSentences = userSentence
+      ? [...word.user_sentences, userSentence]
+      : word.user_sentences;
 
     let newCategory = word.category;
     if (word.category === 'LEARNING' && newPracticeCount >= 3) {
       newCategory = 'KNOW_WELL';
     }
 
-    await updateWord(id, {
+    const updates: Partial<VocabularyWord> = {
       practice_count: newPracticeCount,
       last_practiced: new Date().toISOString(),
       user_sentences: newUserSentences,
       category: newCategory,
       scaffold_prompt: null,
-    });
+    };
+
+    if (rating) {
+      const effectiveUsefulness = usefulness ?? word.usefulness ?? 2;
+      updates.next_review_at = computeNextReviewAt(rating, effectiveUsefulness);
+    }
+    if (usefulness !== undefined) {
+      updates.usefulness = usefulness;
+    }
+
+    await updateWord(id, updates);
+  };
+
+  const setReviewDate = async (id: string, next_review_at: string | null) => {
+    await updateWord(id, { next_review_at: next_review_at ?? undefined });
   };
 
   const bulkImport = async (entries: Array<{ word: string; definition: string }>) => {
@@ -301,6 +332,8 @@ export function useVocabulary() {
     unarchiveWord,
     bulkArchiveWords,
     practiceWord,
+    setReviewDate,
+    computeNextReviewAt,
     bulkImport,
     checkDuplicate,
   };
