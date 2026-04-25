@@ -25,7 +25,7 @@ const DAY_BADGE_COLORS: Record<Rating, string> = {
 
 export default function OnboardingSession({ words, practiceWord, onClose }: Props) {
   const unqueuedWords = useMemo(
-    () => words.filter(w => !w.is_archived && !w.next_review_at),
+    () => words.filter(w => !w.is_archived),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [] // intentionally snapshot at mount — list shouldn't shift mid-session
   );
