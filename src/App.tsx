@@ -6,7 +6,7 @@ import QuickAdd from './components/QuickAdd';
 import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
 import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
-import { Plus, LogOut, Settings, BookOpenCheck } from 'lucide-react';
+import { Plus, LogOut, Settings, BookOpenCheck, ListPlus, Loader2 } from 'lucide-react';
 // Hidden imports (This week + Practice — hidden from UI, keep for potential restoration)
 // import { Play, Zap } from 'lucide-react';
 
@@ -62,6 +62,7 @@ function App() {
   const [showReview, setShowReview] = useState(false);
   const [showQueueSelect, setShowQueueSelect] = useState(false);
   const [queueSelected, setQueueSelected] = useState<string[]>([]);
+  const [queuingAll, setQueuingAll] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -169,6 +170,14 @@ function App() {
   const queuedWords = words.filter(w =>
     !w.is_archived && w.next_review_at != null
   );
+  const unqueuedWords = words.filter(w => !w.is_archived && !w.next_review_at);
+
+  const handleQueueAll = async () => {
+    setQueuingAll(true);
+    const ts = new Date().toISOString();
+    await Promise.all(unqueuedWords.map(w => setReviewDate(w.id, ts)));
+    setQueuingAll(false);
+  };
 
   const weeklySelectedWords = words.filter(w => weeklyState.selected.includes(w.id));
   const hasWeeklyWords = weeklyState.selected.length > 0;
@@ -203,6 +212,20 @@ function App() {
                 </button>
               )}
               */}
+
+              {!isReadOnly && unqueuedWords.length > 0 && (
+                <button
+                  onClick={handleQueueAll}
+                  disabled={queuingAll}
+                  className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg transition-colors text-sm disabled:opacity-50"
+                  title={`Add ${unqueuedWords.length} unqueued word${unqueuedWords.length !== 1 ? 's' : ''} to review queue`}
+                >
+                  {queuingAll
+                    ? <Loader2 size={15} className="animate-spin" />
+                    : <ListPlus size={15} />}
+                  Queue all
+                </button>
+              )}
 
               {!isReadOnly && words.length > 0 && (
                 <button
