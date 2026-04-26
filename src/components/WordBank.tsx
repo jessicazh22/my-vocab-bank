@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { VocabularyWord } from '../lib/supabase';
 import { getTagColor } from '../lib/utils';
-import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive } from 'lucide-react';
+import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive, CalendarPlus, CalendarCheck } from 'lucide-react';
 import WordDetail from './WordDetail';
 import Confetti from './Confetti';
+import { Rating, Usefulness, USEFULNESS_LABELS, computeDays } from '../lib/srs';
 
 type NavSection = 'NEED_TO_LEARN' | 'NEED_TO_USE' | 'KNOW_WELL';
 
@@ -41,6 +42,13 @@ const NAV_SECTIONS: { key: NavSection; label: string; Icon: React.ElementType; a
   { key: 'NEED_TO_USE',   label: 'Use More Often', Icon: RotateCcw, activeText: 'text-teal-300',    cardGlow: 'border-teal-900/30 hover:border-teal-600/30 hover:shadow-[0_0_20px_rgba(20,184,166,0.08)]'    },
   { key: 'KNOW_WELL',     label: 'Know Well',      Icon: Check,     activeText: 'text-emerald-300', cardGlow: 'border-emerald-900/30 hover:border-emerald-600/30 hover:shadow-[0_0_20px_rgba(52,211,153,0.08)]' },
 ];
+
+const QUEUE_RATING_COLORS: Record<string, string> = {
+  again: 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50',
+  hard:  'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50',
+  good:  'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600',
+  easy:  'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50',
+};
 
 function getWordUpdatesForSection(section: NavSection): Partial<VocabularyWord> {
   if (section === 'NEED_TO_LEARN') return { category: 'LEARNING', familiarity: 'NEED_TO_LEARN' };
@@ -162,6 +170,9 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
   };
 
   const [exitingWordId, setExitingWordId] = useState<string | null>(null);
+  const [queueOpenId, setQueueOpenId] = useState<string | null>(null);
+  const [queueUsefulness, setQueueUsefulness] = useState<Usefulness>(2);
+  const [queueSaving, setQueueSaving] = useState(false);
 
   const handleConfettiComplete = useCallback(() => {
     setConfettiOrigin(null);
@@ -220,6 +231,16 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
   const handleQuickArchive = async (e: React.MouseEvent, wordId: string) => {
     e.stopPropagation();
     await archiveWord(wordId);
+  };
+
+  const handleQueueRate = async (wordId: string, rating: Rating, usefulness: Usefulness) => {
+    setQueueSaving(true);
+    try {
+      await practiceWord(wordId, '', rating, usefulness);
+    } finally {
+      setQueueSaving(false);
+      setQueueOpenId(null);
+    }
   };
 
   const renderWordCard = (word: VocabularyWord, section: NavSection = 'NEED_TO_LEARN') => {
@@ -285,25 +306,48 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
         )}
 
         {!isReadOnly && !anySelectMode && (
-          <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-            <button
-              onClick={(e) => handleQuickArchive(e, word.id)}
-              className="p-1.5 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
-              title="Archive"
-            >
-              <Archive size={14} />
-            </button>
-            <button
-              onClick={(e) => handleMoveToSection(e, word.id, isNeedToUse ? 'NEED_TO_LEARN' : 'NEED_TO_USE')}
-              className={`p-1.5 rounded-md ${
-                isNeedToUse
-                  ? 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'
-                  : 'text-zinc-500 hover:text-teal-400 hover:bg-teal-500/10'
-              }`}
-              title={isNeedToUse ? 'Move back to Need to Learn' : 'Move to Use More Often'}
-            >
-              {isNeedToUse ? <RotateCcw size={14} /> : <BookOpen size={14} />}
-            </button>
+          <div className="absolute top-2 right-2 flex items-center gap-1">
+            <div className="opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1">
+              <button
+                onClick={(e) => handleQuickArchive(e, word.id)}
+                className="p-1.5 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                title="Archive"
+              >
+                <Archive size={14} />
+              </button>
+              <button
+                onClick={(e) => handleMoveToSection(e, word.id, isNeedToUse ? 'NEED_TO_LEARN' : 'NEED_TO_USE')}
+                className={`p-1.5 rounded-md ${
+                  isNeedToUse
+                    ? 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'
+                    : 'text-zinc-500 hover:text-teal-400 hover:bg-teal-500/10'
+                }`}
+                title={isNeedToUse ? 'Move back to Need to Learn' : 'Move to Use More Often'}
+              >
+                {isNeedToUse ? <RotateCcw size={14} /> : <BookOpen size={14} />}
+              </button>
+            </div>
+            {word.word_type === 'word' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (queueOpenId === word.id) {
+                    setQueueOpenId(null);
+                  } else {
+                    setQueueOpenId(word.id);
+                    setQueueUsefulness((word.usefulness ?? 2) as Usefulness);
+                  }
+                }}
+                className={`p-1.5 rounded-md transition-all ${
+                  word.next_review_at
+                    ? 'text-violet-400 hover:text-violet-300 hover:bg-violet-500/10'
+                    : 'opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10'
+                }`}
+                title={word.next_review_at ? 'Queued for review — click to re-rate' : 'Add to review queue'}
+              >
+                {word.next_review_at ? <CalendarCheck size={14} /> : <CalendarPlus size={14} />}
+              </button>
+            )}
           </div>
         )}
 
@@ -339,6 +383,66 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
             )}
           </div>
         </div>
+
+        {/* Inline queue panel */}
+        {!anySelectMode && word.word_type === 'word' && queueOpenId === word.id && (
+          <div
+            className="mt-3 pt-3 border-t border-zinc-700/50 space-y-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">How often would you use this?</p>
+              <div className="grid grid-cols-2 gap-1">
+                {([1, 2, 3, 4] as Usefulness[]).map(u => (
+                  <button
+                    key={u}
+                    onClick={() => setQueueUsefulness(u)}
+                    className={`py-1.5 px-2 rounded text-xs text-left transition-colors ${
+                      queueUsefulness === u
+                        ? 'bg-violet-900/40 text-violet-300 border border-violet-700/50'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-500 border border-transparent'
+                    }`}
+                  >
+                    {USEFULNESS_LABELS[u]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">How well do you know it?</p>
+              <div className="grid grid-cols-4 gap-1">
+                {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => (
+                  <button
+                    key={r}
+                    onClick={() => handleQueueRate(word.id, r, queueUsefulness)}
+                    disabled={queueSaving}
+                    className={`py-1.5 rounded text-[10px] font-medium transition-colors disabled:opacity-50 flex flex-col items-center gap-0.5 ${QUEUE_RATING_COLORS[r]}`}
+                  >
+                    <span className="capitalize">{r}</span>
+                    <span className="opacity-60">~{computeDays(r, queueUsefulness)}d</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {word.next_review_at && setReviewDate && (
+              <button
+                onClick={async () => {
+                  await setReviewDate(word.id, null);
+                  setQueueOpenId(null);
+                }}
+                className="text-[10px] text-zinc-600 hover:text-red-400 w-full text-center py-0.5 transition-colors"
+              >
+                Remove from queue
+              </button>
+            )}
+            <button
+              onClick={() => setQueueOpenId(null)}
+              className="text-[10px] text-zinc-600 hover:text-zinc-400 w-full text-center py-0.5 transition-colors"
+            >
+              cancel
+            </button>
+          </div>
+        )}
       </div>
     );
   };

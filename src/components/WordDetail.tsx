@@ -825,25 +825,55 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
               {/* Add to review queue / next due date */}
               {setReviewDate && (
                 localWord.next_review_at ? (
-                  <p className="text-xs text-zinc-600">
-                    Due {new Date(localWord.next_review_at) <= new Date()
-                      ? 'now'
-                      : `${Math.ceil((new Date(localWord.next_review_at).getTime() - Date.now()) / 86400000)} day${
-                          Math.ceil((new Date(localWord.next_review_at).getTime() - Date.now()) / 86400000) !== 1 ? 's' : ''
-                        }`}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-xs text-zinc-600">
+                      Due {new Date(localWord.next_review_at) <= new Date()
+                        ? 'now'
+                        : `${Math.ceil((new Date(localWord.next_review_at).getTime() - Date.now()) / 86400000)} day${
+                            Math.ceil((new Date(localWord.next_review_at).getTime() - Date.now()) / 86400000) !== 1 ? 's' : ''
+                          }`}
+                    </p>
+                    <button
+                      onClick={async () => {
+                        await setReviewDate(word.id, null);
+                        setLocalWord(prev => ({ ...prev, next_review_at: undefined }));
+                        onWordUpdate?.();
+                      }}
+                      className="text-[10px] text-zinc-700 hover:text-red-400 transition-colors"
+                    >
+                      unqueue
+                    </button>
+                  </div>
                 ) : (
-                  <button
-                    onClick={async () => {
-                      const now = new Date().toISOString();
-                      setLocalWord(prev => ({ ...prev, next_review_at: now }));
-                      await setReviewDate(word.id, now);
-                      onWordUpdate?.();
-                    }}
-                    className="text-xs text-zinc-600 hover:text-amber-400 transition-colors"
-                  >
-                    + Add to review queue
-                  </button>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] text-zinc-500">Queue for review — how well do you know it?</p>
+                    <div className="grid grid-cols-4 gap-1">
+                      {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => {
+                        const days = computeDays(r, localWord.usefulness ?? 2);
+                        return (
+                          <button
+                            key={r}
+                            onClick={async () => {
+                              const usefulness = (localWord.usefulness ?? 2) as Usefulness;
+                              await practiceWord(word.id, '', r as Rating, usefulness);
+                              const next_review_at = new Date(Date.now() + days * 86400000).toISOString();
+                              setLocalWord(prev => ({ ...prev, next_review_at }));
+                              onWordUpdate?.();
+                            }}
+                            className={`py-1.5 rounded text-[10px] font-medium transition-colors flex flex-col items-center gap-0.5 ${
+                              r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
+                              r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
+                              r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
+                                              'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
+                            }`}
+                          >
+                            <span className="capitalize">{r}</span>
+                            <span className="opacity-60">~{days}d</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )
               )}
             </div>
