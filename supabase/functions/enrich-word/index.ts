@@ -348,17 +348,28 @@ Return ONLY: {"scaffoldPrompt": "..."}`;
 
       const scaffoldData = await scaffoldResponse.json();
       const scaffoldContent = scaffoldData.choices?.[0]?.message?.content || "";
+      // Try JSON parse first
       try {
         const jsonMatch = scaffoldContent.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          return new Response(JSON.stringify(parsed), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          if (parsed.scaffoldPrompt) {
+            return new Response(JSON.stringify(parsed), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
         }
-      } catch {
-        // Fall through to full enrichment
+      } catch { /* fall through */ }
+      // If the model returned raw text instead of JSON, use it directly as the prompt
+      if (scaffoldContent.trim().length > 15) {
+        return new Response(JSON.stringify({ scaffoldPrompt: scaffoldContent.trim() }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+      // Last resort: generate a minimal but useful scaffold
+      return new Response(JSON.stringify({
+        scaffoldPrompt: `"${word}" tends to appear in precise, considered writing. Can you use it in a sentence about something specific from your own experience?`
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const systemPrompt = `You are a vocabulary enrichment assistant. Given a word and its definition, generate helpful learning content.
@@ -423,9 +434,9 @@ Guidelines:
       }
     } catch {
       enrichment = {
-        examples: ["Unable to generate examples."],
-        context: "Unable to generate context.",
-        scaffoldPrompt: "",
+        examples: [],
+        context: "",
+        scaffoldPrompt: `Can you use "${word}" in a sentence that shows its precise meaning?`,
       };
     }
 
