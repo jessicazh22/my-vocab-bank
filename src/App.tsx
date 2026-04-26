@@ -209,7 +209,7 @@ function App() {
               )}
               */}
 
-              {!isReadOnly && words.filter(w => !w.is_archived).length > 0 && (
+              {!isReadOnly && words.filter(w => !w.is_archived && w.word_type === 'word').length > 0 && (
                 <button
                   onClick={handleQueueAll}
                   className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg transition-colors text-sm"

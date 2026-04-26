@@ -34,7 +34,7 @@ const DAY_BADGE_COLORS: Record<Rating, string> = {
 
 export default function OnboardingSession({ words, practiceWord, onClose }: Props) {
   const allWords = useMemo(
-    () => words.filter(w => !w.is_archived),
+    () => words.filter(w => !w.is_archived && w.word_type === 'word'),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
