@@ -11,6 +11,13 @@ interface Props {
 
 const DEFAULT_USEFULNESS: Usefulness = 2;
 
+const USEFULNESS_COLORS: Record<Usefulness, { base: string; active: string }> = {
+  1: { base: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-transparent', active: 'bg-sky-900/40 text-sky-300 border border-sky-700/50' },
+  2: { base: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-transparent', active: 'bg-teal-900/40 text-teal-300 border border-teal-700/50' },
+  3: { base: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-transparent', active: 'bg-amber-900/40 text-amber-300 border border-amber-700/50' },
+  4: { base: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-transparent', active: 'bg-violet-900/40 text-violet-300 border border-violet-700/50' },
+};
+
 const RATING_COLORS: Record<Rating, string> = {
   again: 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50',
   hard:  'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50',
@@ -193,8 +200,8 @@ export default function OnboardingSession({ words, practiceWord, onClose }: Prop
                   onClick={() => setSelectedUsefulness(u)}
                   className={`py-2 px-3 rounded-lg text-sm transition-colors text-left ${
                     selectedUsefulness === u
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-600/50'
-                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-500 border border-transparent'
+                      ? USEFULNESS_COLORS[u].active
+                      : USEFULNESS_COLORS[u].base
                   }`}
                 >
                   {USEFULNESS_LABELS[u]}
