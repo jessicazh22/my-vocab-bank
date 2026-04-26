@@ -38,6 +38,22 @@ interface PreviousEnrichment {
   scaffold_prompt?: string;
 }
 
+const PRACTICE_CTAS = [
+  'Now use it →',
+  'Your turn →',
+  'Write with it →',
+  'Put it to use →',
+  'Make it yours →',
+  'Time to write →',
+  'Try it out →',
+  'Use it in a sentence →',
+];
+
+function getPracticeCta(wordId: string): string {
+  const hash = wordId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return PRACTICE_CTAS[hash % PRACTICE_CTAS.length];
+}
+
 export default function WordDetail({ word, onClose, onWordUpdate, updateWord, practiceWord, setReviewDate, isReadOnly = false }: WordDetailProps) {
   const [learningMode, setLearningMode] = useState(false);
   const [showCard, setShowCard] = useState(true);
@@ -415,7 +431,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                     onClick={() => setShowCard(false)}
                     className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors font-medium"
                   >
-                    Ready to practice
+                    {getPracticeCta(word.id)}
                   </button>
                 </div>
               </div>
@@ -909,7 +925,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                 className="flex items-center gap-2 px-5 py-2.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg transition-colors border border-amber-600/30 text-sm"
               >
                 <GraduationCap size={16} />
-                Ready to practice
+                {getPracticeCta(word.id)}
               </button>
             </div>
           )}
