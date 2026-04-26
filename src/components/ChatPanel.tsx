@@ -7,7 +7,7 @@ interface ChatPanelProps {
   wordId: string;
   word: string;
   definition?: string;
-  accent?: 'amber' | 'teal';
+  accent?: 'amber' | 'teal' | 'violet';
   label?: string;
 }
 
@@ -17,6 +17,12 @@ const ACCENT_STYLES = {
     text: 'text-amber-300/90',
     spinner: 'text-amber-400',
     hover: 'hover:text-amber-400',
+  },
+  violet: {
+    bubble: 'bg-violet-900/20 border-violet-800/30',
+    text: 'text-violet-300/90',
+    spinner: 'text-violet-400',
+    hover: 'hover:text-violet-400',
   },
   teal: {
     bubble: 'bg-teal-900/20 border-teal-800/50',

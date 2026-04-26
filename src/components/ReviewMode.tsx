@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { VocabularyWord, callEdgeFunction } from '../lib/supabase';
-import { X, Check, Loader2 } from 'lucide-react';
+import { X, Check, Loader2, RotateCcw } from 'lucide-react';
 import { Rating, Feedback, computeDays } from '../lib/srs';
 import SentenceFeedback from './SentenceFeedback';
 import ScaffoldPrompt from './ScaffoldPrompt';
@@ -309,14 +309,17 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
       })
     : [];
 
+  const REVIEW_CTAS: string[] = ['Write with it →', 'Your turn →', 'Use it →', 'Time to use it →', 'Make it yours →', 'Put it to use →'];
+  const cta = REVIEW_CTAS[(currentWord?.id ?? '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % REVIEW_CTAS.length];
+
   return (
     <div className="fixed inset-0 bg-zinc-900 z-50 overflow-auto">
       <div className="min-h-screen flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-zinc-800">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-500">
-              {currentIndex + 1} / {reviewWords.length}
-            </span>
+            <span className="text-sm text-zinc-500">{currentIndex + 1} / {reviewWords.length}</span>
             <span className={`text-xs px-2 py-1 rounded ${
               mode === 'learn'  ? 'bg-amber-900/30 text-amber-400' :
               mode === 'revise' ? 'bg-teal-900/30 text-teal-400' :
@@ -330,181 +333,159 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
           </button>
         </div>
 
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-2xl space-y-8">
-            <div className="text-center">
-              <h1 className={`font-light text-zinc-100 mb-6 ${isSentence ? 'text-2xl md:text-3xl leading-relaxed' : 'text-4xl'}`}>
-                {displayWord}
-              </h1>
+        {/* Card area */}
+        <div className="flex-1 flex items-start justify-center p-6 md:p-8 overflow-auto">
+          <div className="w-full max-w-md my-auto">
 
-              {/* Collocation picker */}
-              {mode === 'review' && validCollocations.length >= 2 && !showContent && (
-                <div className="mb-6">
-                  <p className="text-zinc-600 text-xs mb-3">Practice as:</p>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    <button
-                      onClick={() => setSelectedCollocation(null)}
-                      className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                        selectedCollocation === null
-                          ? 'bg-zinc-700 text-zinc-100 border-zinc-500'
-                          : 'bg-transparent text-zinc-500 border-zinc-700 hover:text-zinc-300'
-                      }`}
-                    >
-                      {currentWord.word}
-                    </button>
-                    {validCollocations.map((c, i) => (
+            {/* ── FRONT (word + CTA) ── */}
+            {!showContent && (
+              <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 space-y-5">
+                <h1 className={`font-light text-zinc-100 ${isSentence ? 'text-2xl leading-relaxed' : 'text-3xl'}`}>
+                  {displayWord}
+                </h1>
+
+                {/* Collocation picker */}
+                {mode === 'review' && validCollocations.length >= 2 && (
+                  <div>
+                    <p className="text-zinc-600 text-xs mb-2">Practice as:</p>
+                    <div className="flex flex-wrap gap-1.5">
                       <button
-                        key={i}
-                        onClick={() => setSelectedCollocation(c.phrase)}
-                        className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                          selectedCollocation === c.phrase
+                        onClick={() => setSelectedCollocation(null)}
+                        className={`px-2.5 py-1 rounded-lg text-xs transition-colors border ${
+                          selectedCollocation === null
                             ? 'bg-zinc-700 text-zinc-100 border-zinc-500'
                             : 'bg-transparent text-zinc-500 border-zinc-700 hover:text-zinc-300'
                         }`}
                       >
-                        {c.phrase}
+                        {currentWord.word}
                       </button>
-                    ))}
+                      {validCollocations.map((c, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setSelectedCollocation(c.phrase)}
+                          className={`px-2.5 py-1 rounded-lg text-xs transition-colors border ${
+                            selectedCollocation === c.phrase
+                              ? 'bg-zinc-700 text-zinc-100 border-zinc-500'
+                              : 'bg-transparent text-zinc-500 border-zinc-700 hover:text-zinc-300'
+                          }`}
+                        >
+                          {c.phrase}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {mode === 'learn' && currentWord.scaffold_prompt && !showContent && (
-                <p className="text-zinc-400 text-lg mb-8 leading-relaxed max-w-xl mx-auto">
-                  {currentWord.scaffold_prompt}
-                </p>
-              )}
+                {/* Mode-specific front prompt */}
+                {mode === 'learn' && currentWord.scaffold_prompt && (
+                  <p className="text-zinc-400 leading-relaxed">{currentWord.scaffold_prompt}</p>
+                )}
+                {mode === 'revise' && (
+                  <p className="text-zinc-400 italic">{currentPrompt.prompt}</p>
+                )}
+                {mode === 'review' && (
+                  <p className="text-zinc-500 text-sm">
+                    {isRecognitionMode ? 'Which sentence uses this most accurately?' : 'How well do you know this?'}
+                  </p>
+                )}
 
-              {mode === 'revise' && !showContent && (
-                <p className="text-zinc-400 text-lg mb-8 italic">{currentPrompt.prompt}</p>
-              )}
-
-              {mode === 'review' && !showContent && (
-                <p className="text-zinc-500 text-base mb-8 italic">
-                  {isRecognitionMode ? 'Which sentence uses this most accurately?' : 'How well do you know this?'}
-                </p>
-              )}
-
-              {!showContent ? (
                 <button
                   onClick={() => setShowContent(true)}
-                  className="px-8 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg transition-colors border border-zinc-700"
+                  className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors font-medium"
                 >
-                  {mode === 'learn' ? 'Show definition' : mode === 'revise' ? "I've thought about it" : 'Show definition'}
+                  {cta}
                 </button>
-              ) : (
-                <div className="space-y-6">
+              </div>
+            )}
 
-                  {/* Definition + content block */}
-                  {mode === 'learn' && (
-                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-6 text-left">
-                      <p className="text-zinc-300 text-lg leading-relaxed mb-4">{currentWord.definition}</p>
-                      {exampleSentences.length > 0 && (
-                        <ul className="space-y-2">
-                          {exampleSentences.map((example, i) => {
-                            const isYours = example.trim().startsWith('[yours] ');
-                            const text = isYours ? example.trim().replace('[yours] ', '') : example.trim();
-                            return (
-                              <li key={i} className={`italic leading-relaxed pl-3 border-l-2 text-sm ${
-                                isYours ? 'border-amber-600/50 text-zinc-300' : 'border-zinc-700 text-zinc-400'
-                              }`}>
-                                "{text}"
-                                {isYours && (
-                                  <span className="not-italic text-xs ml-2 px-1.5 py-0.5 bg-amber-500/20 text-amber-300 rounded">yours</span>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </div>
-                  )}
+            {/* ── BACK (definition + chat + practice) ── */}
+            {showContent && (
+              <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 space-y-5">
 
-                  {(mode === 'revise' || mode === 'review') && (
-                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-6 text-left space-y-4">
-                      {currentWord.definition && (
-                        <div>
-                          <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">Meaning</p>
-                          <p className="text-zinc-200 leading-relaxed">{currentWord.definition}</p>
-                        </div>
-                      )}
-                      {currentWord.usage_hint && (
-                        <div>
-                          <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">When to use</p>
-                          <p className="text-teal-400/90 leading-relaxed">{currentWord.usage_hint}</p>
-                        </div>
-                      )}
-                      {currentWord.context && (
-                        <div>
-                          <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">Context</p>
-                          <p className="text-zinc-400 leading-relaxed">{currentWord.context}</p>
-                        </div>
-                      )}
-                      {exampleSentences.length > 0 && !isSentence && (
-                        <div>
-                          <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">Example{exampleSentences.length > 1 ? 's' : ''}</p>
-                          <ul className="space-y-2">
-                            {exampleSentences.map((example, i) => {
-                              const isYours = example.trim().startsWith('[yours] ');
-                              const text = isYours ? example.trim().replace('[yours] ', '') : example.trim();
-                              return (
-                                <li key={i} className={`italic leading-relaxed pl-3 border-l-2 text-sm ${
-                                  isYours ? 'border-amber-600/50 text-zinc-300' : 'border-zinc-700 text-zinc-400'
-                                }`}>
-                                  "{text}"
-                                  {isYours && (
-                                    <span className="not-italic text-xs ml-2 px-1.5 py-0.5 bg-amber-500/20 text-amber-300 rounded">yours</span>
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                {/* Back header */}
+                <div className="flex items-center justify-between">
+                  <span className={`font-light text-zinc-100 ${isSentence ? 'text-xl leading-relaxed' : 'text-2xl'}`}>
+                    {displayWord}
+                  </span>
+                  <button
+                    onClick={() => setShowContent(false)}
+                    className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
+                  >
+                    <RotateCcw size={14} />
+                    Flip card
+                  </button>
+                </div>
+
+                {/* Definition block */}
+                {(mode === 'learn' || mode === 'revise' || mode === 'review') && (
+                  <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 space-y-3">
+                    <p className="text-zinc-200 leading-relaxed">{currentWord.definition}</p>
+                    {currentWord.context && (
+                      <p className="text-zinc-500 text-sm leading-relaxed">{currentWord.context}</p>
+                    )}
+                    {exampleSentences.length > 0 && !isSentence && (
+                      <ul className="space-y-1.5 pt-1">
+                        {exampleSentences.map((example, i) => {
+                          const isYours = example.trim().startsWith('[yours] ');
+                          const text = isYours ? example.trim().replace('[yours] ', '') : example.trim();
+                          return (
+                            <li key={i} className={`italic leading-relaxed pl-3 border-l-2 text-sm ${
+                              isYours ? 'border-amber-600/50 text-zinc-300' : 'border-zinc-700 text-zinc-400'
+                            }`}>
+                              "{text}"
+                              {isYours && (
+                                <span className="not-italic text-xs ml-2 px-1.5 py-0.5 bg-amber-500/20 text-amber-300 rounded">yours</span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* ChatPanel — ask AI about this word */}
+                <ChatPanel
+                  wordId={currentWord.id}
+                  word={currentWord.word}
+                  definition={currentWord.definition}
+                  accent={mode === 'revise' ? 'teal' : mode === 'review' ? 'violet' : 'amber'}
+                  label="Ask about this word"
+                />
+
+                {/* Practice section */}
+                <div className="pt-1">
 
                   {/* Learn mode: textarea */}
                   {mode === 'learn' && (
-                    <>
-                      <div className="text-left">
-                        <label className="block text-zinc-400 text-sm mb-3">Use it in a sentence:</label>
-                        <textarea
-                          value={userSentence}
-                          onChange={e => setUserSentence(e.target.value)}
-                          placeholder="Write your own sentence..."
-                          rows={4}
-                          className="w-full px-4 py-3 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-zinc-500 resize-none"
-                          autoFocus spellCheck autoCorrect="on"
-                        />
-                      </div>
+                    <div className="space-y-3">
+                      <label className="block text-zinc-500 text-xs uppercase tracking-wide">Use it in a sentence</label>
+                      <textarea
+                        value={userSentence}
+                        onChange={e => setUserSentence(e.target.value)}
+                        placeholder="Write your own sentence..."
+                        rows={3}
+                        className="w-full px-4 py-3 bg-zinc-800 text-zinc-100 rounded-lg border border-zinc-700 focus:outline-none focus:border-amber-600/50 resize-none text-sm"
+                        autoFocus spellCheck autoCorrect="on"
+                      />
                       <button
                         onClick={handleNext}
                         disabled={!userSentence.trim()}
-                        className="w-full py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full py-3 bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-amber-600/30 text-sm font-medium"
                       >
                         I used it
                       </button>
-                    </>
+                    </div>
                   )}
 
                   {/* Revise mode */}
                   {mode === 'revise' && (
-                    <div className="space-y-4">
-                      <div className="text-left">
-                        <ChatPanel
-                          wordId={currentWord.id}
-                          word={currentWord.word}
-                          definition={currentWord.definition}
-                          accent="teal"
-                          label="Ask a question"
-                        />
-                      </div>
+                    <div className="space-y-3">
                       <div className="flex gap-3">
-                        <button onClick={goToNext} className="flex-1 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors font-medium">Done</button>
-                        <button onClick={goToNext} className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors">Skip</button>
+                        <button onClick={goToNext} className="flex-1 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors font-medium text-sm">Done</button>
+                        <button onClick={goToNext} className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors text-sm">Skip</button>
                       </div>
-                      <button onClick={goToNext} className="w-full text-zinc-500 hover:text-zinc-400 text-sm transition-colors py-2">Not for me</button>
+                      <button onClick={goToNext} className="w-full text-zinc-600 hover:text-zinc-400 text-xs transition-colors py-1">Not for me</button>
                     </div>
                   )}
 
@@ -516,14 +497,14 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                           See you in ~{confirmedRating.days} day{confirmedRating.days !== 1 ? 's' : ''}
                         </p>
                       ) : mcLoading ? (
-                        <div className="flex items-center justify-center gap-2 py-8 text-zinc-500">
+                        <div className="flex items-center justify-center gap-2 py-6 text-zinc-500">
                           <Loader2 size={16} className="animate-spin" />
                           <span className="text-sm">Loading options...</span>
                         </div>
                       ) : mcOptions ? (
                         <>
                           {!mcRevealed && (
-                            <p className="text-zinc-500 text-xs text-center mb-4">Which sentence uses "{currentWord.word}" most accurately?</p>
+                            <p className="text-zinc-500 text-xs text-center mb-3">Which sentence uses "{currentWord.word}" most accurately?</p>
                           )}
                           <div className="space-y-2 text-left">
                             {mcOptions.options.map((opt, i) => {
@@ -541,12 +522,8 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                               return (
                                 <button
                                   key={i}
-                                  onClick={() => {
-                                    if (mcRevealed) return;
-                                    setSelectedOption(i);
-                                    setMcRevealed(true);
-                                  }}
-                                  className={`w-full text-left rounded-lg border p-4 transition-all ${cardStyle}`}
+                                  onClick={() => { if (mcRevealed) return; setSelectedOption(i); setMcRevealed(true); }}
+                                  className={`w-full text-left rounded-lg border p-3 transition-all ${cardStyle}`}
                                 >
                                   <div className="flex items-start gap-3">
                                     <span className={`text-xs font-medium mt-0.5 shrink-0 ${
@@ -563,7 +540,7 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                           </div>
                           {mcRevealed && (
                             <div className="space-y-3 pt-1">
-                              <p className="text-xs text-zinc-500 text-left pl-1">{mcOptions.reason}</p>
+                              <p className="text-xs text-zinc-500 pl-1">{mcOptions.reason}</p>
                               <SentenceFeedback
                                 feedback={{ correct: true, swaps: [] }}
                                 sentence=""
@@ -577,7 +554,6 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                           )}
                         </>
                       ) : (
-                        // MC failed — fall through to sentence production below
                         <ReviewSentenceProduction
                           word={currentWord}
                           selectedCollocation={selectedCollocation}
@@ -619,10 +595,12 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
                   )}
 
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
           </div>
         </div>
+
       </div>
     </div>
   );
