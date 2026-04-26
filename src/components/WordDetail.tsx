@@ -164,8 +164,8 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
           }));
           onWordUpdate?.();
         }
-      } catch {
-        // Scaffold generation failed, continue without it
+      } catch (err) {
+        console.warn('[WordDetail] scaffold generation failed:', err);
       } finally {
         setScaffoldLoading(false);
       }
@@ -450,7 +450,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                           : (localWord.scaffold_prompt ?? undefined)}
                         fallback={targetCollocation
                           ? `Try using '${targetCollocation.phrase}' in a sentence${targetCollocation.note ? ` — ${targetCollocation.note}` : ''}.`
-                          : undefined}
+                          : `Try using "${localWord.word}" in a sentence.`}
                         loadingLabel={targetCollocation ? 'Generating a prompt...' : 'Generating a prompt to help you...'}
                       />
 

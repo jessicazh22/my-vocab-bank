@@ -6,8 +6,7 @@ import QuickAdd from './components/QuickAdd';
 import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
 import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
-import { Plus, LogOut, Settings, BookOpenCheck, ListPlus } from 'lucide-react';
-import OnboardingSession from './components/OnboardingSession';
+import { Plus, LogOut, Settings, BookOpenCheck } from 'lucide-react';
 // Hidden imports (This week + Practice — hidden from UI, keep for potential restoration)
 // import { Play, Zap } from 'lucide-react';
 
@@ -63,7 +62,6 @@ function App() {
   const [showReview, setShowReview] = useState(false);
   const [showQueueSelect, setShowQueueSelect] = useState(false);
   const [queueSelected, setQueueSelected] = useState<string[]>([]);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -171,10 +169,6 @@ function App() {
   const queuedWords = words.filter(w =>
     !w.is_archived && w.next_review_at != null
   );
-  const unqueuedWords = words.filter(w => !w.is_archived && !w.next_review_at);
-
-  const handleQueueAll = () => setShowOnboarding(true);
-
   const weeklySelectedWords = words.filter(w => weeklyState.selected.includes(w.id));
   const hasWeeklyWords = weeklyState.selected.length > 0;
   // Guard: wordLogs may be absent on old localStorage state or HMR state preservation
@@ -209,16 +203,6 @@ function App() {
               )}
               */}
 
-              {!isReadOnly && words.filter(w => !w.is_archived && w.word_type === 'word').length > 0 && (
-                <button
-                  onClick={handleQueueAll}
-                  className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg transition-colors text-sm"
-                  title="Rate all words for spaced repetition"
-                >
-                  <ListPlus size={15} />
-                  Queue all
-                </button>
-              )}
 
               {!isReadOnly && words.length > 0 && (
                 <button
@@ -358,14 +342,6 @@ function App() {
         />
       )}
       */}
-
-      {showOnboarding && (
-        <OnboardingSession
-          words={words}
-          practiceWord={practiceWord}
-          onClose={() => setShowOnboarding(false)}
-        />
-      )}
 
       {showQuickAdd && <QuickAdd onClose={() => setShowQuickAdd(false)} addWord={addWord} checkDuplicate={checkDuplicate} locale={locale} />}
 
