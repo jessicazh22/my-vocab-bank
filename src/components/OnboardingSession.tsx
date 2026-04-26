@@ -231,6 +231,17 @@ export default function OnboardingSession({ words, practiceWord, onClose }: Prop
             </div>
           </div>
 
+          {/* Skip option */}
+          <div className="mt-5 text-center">
+            <button
+              onClick={goToNext}
+              disabled={saving}
+              className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors disabled:opacity-50"
+            >
+              I don't need to practise this word
+            </button>
+          </div>
+
         </div>
       </div>
     </div>
