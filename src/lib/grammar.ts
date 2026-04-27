@@ -72,6 +72,16 @@ export interface GrammarSession {
   word_count: number | null;
   analyzed_at: string | null;
   created_at: string;
+  practice_session_id: string | null;
+  sort_order: number;
+}
+
+/** Outer container — one practice session holds 1-N recordings */
+export interface PracticeSession {
+  id: string;
+  created_at: string;
+  completed_at: string | null;
+  recordings: GrammarSession[];
 }
 
 // ── Labels ────────────────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
 import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
 import GrammarModule from './components/GrammarModule';
-import { Plus, LogOut, Settings, BookOpenCheck, BookOpen, Mic } from 'lucide-react';
+import { Plus, LogOut, Settings, BookOpenCheck, BookOpen, Mic, Library } from 'lucide-react';
 // Hidden imports (This week + Practice — hidden from UI, keep for potential restoration)
 // import { Play, Zap } from 'lucide-react';
 
@@ -56,7 +56,8 @@ function App() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { words, loading: wordsLoading, addWord, checkDuplicate, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord, setReviewDate } = useVocabulary();
   const { locale, setLocale } = useLocale();
-  const [activeModule, setActiveModule] = useState<'vocabulary' | 'grammar'>('vocabulary');
+  const [activeModule, setActiveModule]   = useState<'vocabulary' | 'grammar'>('vocabulary');
+  const [grammarView,  setGrammarView]    = useState<'coach' | 'sessions'>('coach');
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showLearn, setShowLearn] = useState(false);
@@ -183,7 +184,9 @@ function App() {
         <div className="px-6 py-3.5">
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-medium tracking-tight text-zinc-100">
-              {activeModule === 'grammar' ? 'Grammar' : 'Vocabulary'}
+              {activeModule === 'grammar'
+                ? grammarView === 'sessions' ? 'Sessions' : 'Grammar Coach'
+                : 'Vocabulary'}
             </h1>
 
             <div className="flex items-center gap-3">
@@ -269,29 +272,66 @@ function App() {
         {/* Left sidebar nav */}
         <nav className="w-52 shrink-0 border-r border-zinc-800/70 px-3 py-8 flex flex-col gap-0.5">
           <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-3 mb-2">Modules</p>
-          {([
-            { id: 'vocabulary', label: 'Vocabulary', Icon: BookOpen, color: 'text-violet-400', activeBorder: 'border-l-violet-500' },
-            { id: 'grammar',    label: 'Grammar',    Icon: Mic,      color: 'text-amber-400',  activeBorder: 'border-l-amber-500'  },
-          ] as const).map(({ id, label, Icon, color, activeBorder }) => (
+
+          {/* Vocabulary */}
+          <button
+            onClick={() => setActiveModule('vocabulary')}
+            className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 text-left border-l-2 ${
+              activeModule === 'vocabulary'
+                ? 'bg-zinc-800/80 text-zinc-100 border-l-violet-500'
+                : 'border-l-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+            }`}
+          >
+            <BookOpen
+              size={15}
+              className={activeModule === 'vocabulary' ? 'text-violet-400' : 'text-zinc-600'}
+            />
+            Vocabulary
+          </button>
+
+          {/* Grammar — with Sessions sub-item */}
+          <div className="flex flex-col">
             <button
-              key={id}
-              onClick={() => setActiveModule(id)}
+              onClick={() => { setActiveModule('grammar'); setGrammarView('coach'); }}
               className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 text-left border-l-2 ${
-                activeModule === id
-                  ? `bg-zinc-800/80 text-zinc-100 ${activeBorder}`
+                activeModule === 'grammar' && grammarView === 'coach'
+                  ? 'bg-zinc-800/80 text-zinc-100 border-l-amber-500'
                   : 'border-l-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
               }`}
             >
-              <Icon size={15} className={activeModule === id ? color : 'text-zinc-600 transition-colors'} />
-              {label}
+              <Mic
+                size={15}
+                className={activeModule === 'grammar' ? 'text-amber-400' : 'text-zinc-600'}
+              />
+              Grammar
             </button>
-          ))}
+
+            {/* Sessions sub-item */}
+            <div className="ml-[22px] pl-3 border-l border-zinc-700/40 mt-0.5 mb-0.5">
+              <button
+                onClick={() => { setActiveModule('grammar'); setGrammarView('sessions'); }}
+                className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-[13px] transition-all duration-150 text-left ${
+                  activeModule === 'grammar' && grammarView === 'sessions'
+                    ? 'text-amber-300/90 bg-zinc-800/60'
+                    : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/30'
+                }`}
+              >
+                <Library size={12} className={activeModule === 'grammar' && grammarView === 'sessions' ? 'text-amber-400/70' : 'text-zinc-700'} />
+                Sessions
+              </button>
+            </div>
+          </div>
         </nav>
 
         {/* Main content */}
         <main className="flex-1 px-8 py-10 overflow-y-auto">
           {activeModule === 'grammar' ? (
-            <GrammarModule userId={user?.id ?? null} locale={locale} />
+            <GrammarModule
+              userId={user?.id ?? null}
+              locale={locale}
+              view={grammarView}
+              onSessionEnded={() => setGrammarView('sessions')}
+            />
           ) : wordsLoading ? (
             <div className="text-center text-zinc-500">Loading...</div>
           ) : words.length === 0 ? (

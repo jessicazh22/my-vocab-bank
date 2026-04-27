@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Mic, CheckCircle2, Trash2, Clock } from 'lucide-react';
+import { Mic, CheckCircle2, Clock, X, ChevronRight } from 'lucide-react';
 import { useTranscription } from '../lib/useTranscription';
-import { useGrammarSession } from '../lib/useGrammarSession';
+import { usePracticeSession } from '../lib/usePracticeSession';
 import TranscriptPanel from './TranscriptPanel';
-import type { GrammarSession } from '../lib/grammar';
+import type { PracticeSession } from '../lib/grammar';
 
 interface Props {
   userId: string | null;
   locale: 'en-AU' | 'en-US';
+  view: 'coach' | 'sessions';
+  onSessionEnded: () => void;
 }
 
 const FEATURES = [
@@ -17,6 +19,7 @@ const FEATURES = [
   'What you did well, always highlighted first',
 ];
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function relativeTime(iso: string): string {
   const diff  = Date.now() - new Date(iso).getTime();
   const mins  = Math.floor(diff / 60_000);
@@ -36,11 +39,21 @@ function formatDuration(sec: number | null): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-// ── Session row ──────────────────────────────────────────────────────────────
-function SessionRow({ session, onDelete }: { session: GrammarSession; onDelete: () => void }) {
+// ── Completed session row ─────────────────────────────────────────────────────
+function CompletedSessionRow({
+  session,
+  onDelete,
+}: {
+  session: PracticeSession;
+  onDelete: () => void;
+}) {
   const [confirming, setConfirming] = useState(false);
-  const preview   = session.transcript.slice(0, 160).trimEnd();
-  const truncated = session.transcript.length > 160;
+
+  const totalWords    = session.recordings.reduce((n, r) => n + (r.word_count    ?? 0), 0);
+  const totalDuration = session.recordings.reduce((n, r) => n + (r.duration_sec  ?? 0), 0);
+  const first         = session.recordings[0];
+  const preview       = first?.transcript.slice(0, 160).trimEnd() ?? '';
+  const truncated     = (first?.transcript.length ?? 0) > 160;
 
   return (
     <div className="group flex flex-col gap-2.5 px-4 py-4 rounded-xl bg-zinc-800/40 border border-zinc-700/50 hover:border-zinc-600/60 transition-colors">
@@ -49,20 +62,19 @@ function SessionRow({ session, onDelete }: { session: GrammarSession; onDelete: 
         <div className="flex items-center gap-3 text-xs text-zinc-500">
           <span className="flex items-center gap-1.5">
             <Clock size={11} />
-            {relativeTime(session.created_at)}
+            {relativeTime(session.completed_at ?? session.created_at)}
           </span>
-          {session.word_count != null && (
-            <span className="text-zinc-600">{session.word_count} words</span>
-          )}
-          {session.duration_sec != null && (
-            <span className="text-zinc-600">{formatDuration(session.duration_sec)}</span>
-          )}
+          <span className="text-zinc-600">
+            {session.recordings.length} recording{session.recordings.length !== 1 ? 's' : ''}
+          </span>
+          {totalWords > 0    && <span className="text-zinc-600">{totalWords} words</span>}
+          {totalDuration > 0 && <span className="text-zinc-600">{formatDuration(totalDuration)}</span>}
         </div>
 
         {confirming ? (
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs text-zinc-500">Delete?</span>
-            <button onClick={onDelete} className="text-xs text-rose-400 hover:text-rose-300 transition-colors font-medium">Yes</button>
+            <button onClick={onDelete}             className="text-xs text-rose-400 hover:text-rose-300 transition-colors font-medium">Yes</button>
             <button onClick={() => setConfirming(false)} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">No</button>
           </div>
         ) : (
@@ -70,32 +82,32 @@ function SessionRow({ session, onDelete }: { session: GrammarSession; onDelete: 
             onClick={() => setConfirming(true)}
             className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-rose-400 transition-all"
           >
-            <Trash2 size={13} />
+            <X size={13} />
           </button>
         )}
       </div>
 
-      {/* Transcript preview */}
-      <p className="text-xs text-zinc-500 leading-relaxed">
-        {preview}{truncated ? '…' : ''}
-      </p>
+      {/* First recording preview */}
+      {preview && (
+        <p className="text-xs text-zinc-500 leading-relaxed">
+          {preview}{truncated ? '…' : ''}
+        </p>
+      )}
     </div>
   );
 }
 
-// ── Sessions tab ─────────────────────────────────────────────────────────────
-function SessionsTab({
+// ── Completed sessions list ───────────────────────────────────────────────────
+function CompletedSessionsList({
   userId,
   sessions,
   loading,
   onDelete,
-  onRecord,
 }: {
   userId: string | null;
-  sessions: GrammarSession[];
+  sessions: PracticeSession[];
   loading: boolean;
   onDelete: (id: string) => void;
-  onRecord: () => void;
 }) {
   if (!userId) {
     return (
@@ -111,28 +123,23 @@ function SessionsTab({
 
   if (sessions.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-4 py-20 text-center">
-        <p className="text-zinc-500 text-sm">No saved sessions yet.</p>
-        <button
-          onClick={onRecord}
-          className="text-xs text-amber-400 hover:text-amber-300 transition-colors underline underline-offset-2"
-        >
-          Record your first session
-        </button>
+      <div className="flex flex-col items-center gap-3 py-20 text-center">
+        <p className="text-zinc-500 text-sm">No completed sessions yet.</p>
+        <p className="text-xs text-zinc-600">Head to Grammar Coach to start your first session.</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="max-w-2xl mx-auto flex flex-col gap-2">
       {sessions.map(s => (
-        <SessionRow key={s.id} session={s} onDelete={() => onDelete(s.id)} />
+        <CompletedSessionRow key={s.id} session={s} onDelete={() => onDelete(s.id)} />
       ))}
     </div>
   );
 }
 
-// ── Record tab (idle) ────────────────────────────────────────────────────────
+// ── Idle (no active session) ──────────────────────────────────────────────────
 function RecordIdle({ supported, onStart }: { supported: boolean; onStart: () => void }) {
   return (
     <div className="flex flex-col items-center gap-8 py-12">
@@ -167,7 +174,7 @@ function RecordIdle({ supported, onStart }: { supported: boolean; onStart: () =>
             transition-all duration-150 active:scale-95"
         >
           <Mic size={15} />
-          Start recording
+          Start session
         </button>
       ) : (
         <p className="text-xs text-zinc-600 text-center">
@@ -178,10 +185,108 @@ function RecordIdle({ supported, onStart }: { supported: boolean; onStart: () =>
   );
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
-export default function GrammarModule({ userId, locale }: Props) {
-  const [activeTab, setActiveTab] = useState<'record' | 'sessions'>('record');
+// ── Active session view ───────────────────────────────────────────────────────
+function ActiveSessionView({
+  session,
+  onRecord,
+  onEnd,
+  onDiscard,
+  onRemoveRecording,
+}: {
+  session: PracticeSession;
+  onRecord: () => void;
+  onEnd: () => void;
+  onDiscard: () => void;
+  onRemoveRecording: (id: string) => void;
+}) {
+  const hasRecordings = session.recordings.length > 0;
 
+  return (
+    <div className="max-w-2xl mx-auto flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex items-center gap-2.5">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-50" />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+        </span>
+        <span className="text-sm text-zinc-300 font-medium">Session in progress</span>
+        {hasRecordings && (
+          <span className="text-xs text-zinc-600 ml-1">
+            · {session.recordings.length} recording{session.recordings.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
+      {/* Recordings list */}
+      {hasRecordings ? (
+        <div className="flex flex-col gap-2">
+          {session.recordings.map((rec, i) => (
+            <div
+              key={rec.id}
+              className="group flex flex-col gap-1.5 px-4 py-3.5 rounded-xl bg-zinc-800/30 border border-zinc-700/40"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5 text-xs text-zinc-500">
+                  <span className="text-zinc-400 font-medium">Recording {i + 1}</span>
+                  {rec.duration_sec != null && <><span className="text-zinc-700">·</span><span>{formatDuration(rec.duration_sec)}</span></>}
+                  {rec.word_count   != null && <><span className="text-zinc-700">·</span><span>{rec.word_count} words</span></>}
+                </div>
+                <button
+                  onClick={() => onRemoveRecording(rec.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-rose-400 transition-all"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <p className="text-xs text-zinc-600 leading-relaxed">
+                {rec.transcript.slice(0, 120).trimEnd()}{rec.transcript.length > 120 ? '…' : ''}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="border border-dashed border-zinc-700/50 rounded-xl px-6 py-8 text-center">
+          <p className="text-sm text-zinc-600">No recordings yet — start your first one below.</p>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center justify-between pt-1">
+        {hasRecordings ? (
+          <button
+            onClick={onEnd}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium
+              bg-zinc-700/60 hover:bg-zinc-700 text-zinc-200 border border-zinc-600/50
+              transition-all duration-150 active:scale-95"
+          >
+            End session
+            <ChevronRight size={14} />
+          </button>
+        ) : (
+          <button
+            onClick={onDiscard}
+            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          >
+            Cancel session
+          </button>
+        )}
+
+        <button
+          onClick={onRecord}
+          className="flex items-center gap-2.5 px-6 py-2.5 rounded-xl text-sm font-medium
+            bg-amber-900/30 hover:bg-amber-900/50 text-amber-300 border border-amber-800/40
+            transition-all duration-150 active:scale-95"
+        >
+          <Mic size={14} />
+          {hasRecordings ? 'Record again' : 'Start recording'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function GrammarModule({ userId, locale, view, onSessionEnded }: Props) {
   const {
     transcript, interimTranscript,
     isListening, isTranscribing,
@@ -189,11 +294,15 @@ export default function GrammarModule({ userId, locale }: Props) {
     start, stop, reset,
   } = useTranscription(locale);
 
-  const { sessions, loading: sessionsLoading, saveSession, deleteSession } = useGrammarSession(userId);
+  const {
+    sessions, activeSession, loading,
+    startSession, addRecording, removeRecording,
+    endSession, discardSession, deleteSession,
+  } = usePracticeSession(userId);
 
   const [editedTranscript, setEditedTranscript] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [savedDuration, setSavedDuration] = useState(0);
+  const [savedDuration, setSavedDuration]       = useState(0);
+  const [adding, setAdding]                     = useState(false);
 
   useEffect(() => {
     if (transcript) {
@@ -206,16 +315,40 @@ export default function GrammarModule({ userId, locale }: Props) {
     ? editedTranscript.trim().split(/\s+/).filter(Boolean).length
     : 0;
 
-  const handleSave = async () => {
-    if (!editedTranscript.trim() || !userId) return;
-    setSaving(true);
-    await saveSession(editedTranscript.trim(), savedDuration);
-    setSaving(false);
-    reset();
-    setActiveTab('sessions'); // jump straight to the list after saving
+  const handleStartSession = async () => {
+    await startSession();
   };
 
-  // Recording / transcribing — always full-screen, no tabs
+  const handleAddToSession = async () => {
+    if (!editedTranscript.trim() || adding) return;
+    setAdding(true);
+    await addRecording(editedTranscript.trim(), savedDuration);
+    setAdding(false);
+    reset();
+  };
+
+  const handleDiscardRecording = () => {
+    reset();
+  };
+
+  const handleEndSession = async () => {
+    await endSession();
+    onSessionEnded();
+  };
+
+  // ── 1. Sessions view (controlled by sidebar nav) ──────────────────────────
+  if (view === 'sessions') {
+    return (
+      <CompletedSessionsList
+        userId={userId}
+        sessions={sessions}
+        loading={loading}
+        onDelete={deleteSession}
+      />
+    );
+  }
+
+  // ── 2. Recording / transcribing ───────────────────────────────────────────
   if (isListening || isTranscribing) {
     return (
       <TranscriptPanel
@@ -229,16 +362,19 @@ export default function GrammarModule({ userId, locale }: Props) {
     );
   }
 
-  // Post-recording: edit + save — no tabs, focused flow
-  if (transcript) {
+  // ── 3. Editing — transcript ready, in active session ─────────────────────
+  if (transcript && activeSession) {
     return (
       <div className="max-w-2xl mx-auto flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <p className="text-sm text-zinc-500">
             <span className="text-zinc-300 font-medium">{editedWordCount}</span> words
           </p>
-          <button onClick={reset} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
-            Discard &amp; start over
+          <button
+            onClick={handleDiscardRecording}
+            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          >
+            Discard recording
           </button>
         </div>
 
@@ -254,78 +390,34 @@ export default function GrammarModule({ userId, locale }: Props) {
         />
         <p className="text-xs text-zinc-600 -mt-2">Fix any transcription errors before saving.</p>
 
-        <div className="flex items-center justify-center gap-3 pt-1">
+        <div className="flex justify-end pt-1">
           <button
-            onClick={handleSave}
-            disabled={!editedTranscript.trim() || saving || !userId}
+            onClick={handleAddToSession}
+            disabled={!editedTranscript.trim() || adding}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium
-              bg-zinc-700 hover:bg-zinc-600 text-zinc-100 border border-zinc-600
+              bg-amber-900/30 hover:bg-amber-900/50 text-amber-300 border border-amber-800/40
               disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
           >
-            {saving ? 'Saving…' : 'Save transcript'}
-          </button>
-          <button
-            disabled
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium
-              bg-amber-900/20 text-amber-500/50 border border-amber-800/30 cursor-not-allowed select-none"
-          >
-            <Mic size={14} />
-            Analyse
-            <span className="text-[10px] text-amber-600/50 uppercase tracking-wider">soon</span>
+            {adding ? 'Saving…' : 'Add to session'}
           </button>
         </div>
-
-        {!userId && (
-          <p className="text-xs text-center text-zinc-600">Log in to save transcripts.</p>
-        )}
       </div>
     );
   }
 
-  // Idle — show tab bar + content
-  return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-0">
+  // ── 4. Active session ─────────────────────────────────────────────────────
+  if (activeSession) {
+    return (
+      <ActiveSessionView
+        session={activeSession}
+        onRecord={start}
+        onEnd={handleEndSession}
+        onDiscard={discardSession}
+        onRemoveRecording={removeRecording}
+      />
+    );
+  }
 
-      {/* Internal tab bar */}
-      <div className="flex gap-1 border-b border-zinc-800 mb-6">
-        {(['record', 'sessions'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`relative px-4 py-2.5 text-sm transition-colors capitalize ${
-              activeTab === tab
-                ? 'text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {tab}
-            {tab === 'sessions' && sessions.length > 0 && (
-              <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                activeTab === 'sessions'
-                  ? 'bg-zinc-700 text-zinc-300'
-                  : 'bg-zinc-800 text-zinc-500'
-              }`}>
-                {sessions.length}
-              </span>
-            )}
-            {activeTab === tab && (
-              <span className="absolute bottom-0 left-0 right-0 h-px bg-amber-500" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'record' ? (
-        <RecordIdle supported={supported} onStart={start} />
-      ) : (
-        <SessionsTab
-          userId={userId}
-          sessions={sessions}
-          loading={sessionsLoading}
-          onDelete={deleteSession}
-          onRecord={() => setActiveTab('record')}
-        />
-      )}
-    </div>
-  );
+  // ── 5. Idle ───────────────────────────────────────────────────────────────
+  return <RecordIdle supported={supported} onStart={handleStartSession} />;
 }
