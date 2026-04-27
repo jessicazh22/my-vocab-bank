@@ -7,7 +7,7 @@ import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
 import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
 import GrammarModule from './components/GrammarModule';
-import { Plus, LogOut, Settings, BookOpenCheck } from 'lucide-react';
+import { Plus, LogOut, Settings, BookOpenCheck, BookOpen, Mic } from 'lucide-react';
 // Hidden imports (This week + Practice — hidden from UI, keep for potential restoration)
 // import { Play, Zap } from 'lucide-react';
 
@@ -177,36 +177,17 @@ function App() {
   const safeWordLogs = weeklyState.wordLogs ?? {};
 
   return (
-    <div className="min-h-screen bg-zinc-900">
+    <div className="min-h-screen bg-zinc-900 flex flex-col">
+      {/* Top header */}
       <header className="border-b border-zinc-800 sticky top-0 bg-zinc-900/95 backdrop-blur z-40">
-        <div className="max-w-5xl mx-auto px-6 py-4">
+        <div className="px-6 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-light text-zinc-100">Vocabulary</h1>
+            <h1 className="text-2xl font-light text-zinc-100">
+              {activeModule === 'grammar' ? 'Grammar' : 'Vocabulary'}
+            </h1>
 
             <div className="flex items-center gap-3">
-              {/* "This week" button hidden — not in use (added 2026-04-24, ask to delete after ~1 week)
-              {words.length > 0 && (
-                <button
-                  onClick={handleWeeklyButtonClick}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm ${
-                    weeklyView !== 'off'
-                      ? 'bg-amber-500/20 text-amber-400'
-                      : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-                  }`}
-                >
-                  <Zap size={16} />
-                  This week
-                  {hasWeeklyWords && weeklyView === 'off' && (
-                    <span className="w-4 h-4 rounded-full bg-amber-500 text-zinc-900 text-[10px] font-bold flex items-center justify-center">
-                      {weeklyState.selected.length}
-                    </span>
-                  )}
-                </button>
-              )}
-              */}
-
-
-              {!isReadOnly && words.length > 0 && (
+              {activeModule === 'vocabulary' && !isReadOnly && words.length > 0 && (
                 <button
                   onClick={handleReviewButtonClick}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
@@ -225,19 +206,7 @@ function App() {
                 </button>
               )}
 
-              {/* "Practice" button hidden — not in use (added 2026-04-24, ask to delete after ~1 week)
-              {!isReadOnly && totalReviewable > 0 && (
-                <button
-                  onClick={() => setShowModeSelector(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg transition-colors"
-                >
-                  <Play size={18} />
-                  Practice
-                </button>
-              )}
-              */}
-
-              {!isReadOnly && (
+              {activeModule === 'vocabulary' && !isReadOnly && (
                 <button
                   onClick={() => setShowQuickAdd(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors"
@@ -292,67 +261,78 @@ function App() {
               )}
             </div>
           </div>
-
-          {/* Module tab bar */}
-          <div className="border-t border-zinc-800/60 mt-3 -mb-4">
-            <div className="flex gap-6">
-              {(['vocabulary', 'grammar'] as const).map(mod => (
-                <button
-                  key={mod}
-                  onClick={() => setActiveModule(mod)}
-                  className={`py-3 text-sm capitalize border-b-2 transition-colors ${
-                    activeModule === mod
-                      ? 'border-violet-500 text-zinc-100'
-                      : 'border-transparent text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {mod}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-12">
-        {activeModule === 'grammar' ? (
-          <GrammarModule userId={user?.id ?? null} locale={locale} />
-        ) : wordsLoading ? (
-          <div className="text-center text-zinc-500">Loading...</div>
-        ) : words.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-zinc-500 mb-4">No words yet</p>
-            {!isReadOnly && (
-              <button onClick={() => setShowQuickAdd(true)} className="text-zinc-400 hover:text-zinc-100 underline">
-                Add your first word
-              </button>
-            )}
-          </div>
-        ) : (
-          <WordBank
-            words={words}
-            updateWord={updateWord}
-            deleteWord={deleteWord}
-            archiveWord={archiveWord}
-            unarchiveWord={unarchiveWord}
-            bulkArchiveWords={bulkArchiveWords}
-            practiceWord={practiceWord}
-            setReviewDate={setReviewDate}
-            isReadOnly={isReadOnly}
-            weeklyMode={weeklyView === 'select'}
-            weeklySelected={weeklyState.selected}
-            onToggleWeeklySelect={handleToggleWeeklySelect}
-            onWeeklyClose={() => {
-              setWeeklyView(weeklyState.selected.length > 0 ? 'review' : 'off');
-            }}
-            queueSelectMode={showQueueSelect}
-            queueSelected={queueSelected}
-            onToggleQueueSelect={handleToggleQueueSelect}
-            onQueueSelectConfirm={handleQueueSelectConfirm}
-            onQueueSelectClose={() => { setShowQueueSelect(false); setQueueSelected([]); }}
-          />
-        )}
-      </main>
+      {/* Body: sidebar + content */}
+      <div className="flex flex-1">
+        {/* Left sidebar nav */}
+        <nav className="w-48 shrink-0 border-r border-zinc-800 px-3 py-6 flex flex-col gap-1">
+          <button
+            onClick={() => setActiveModule('vocabulary')}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+              activeModule === 'vocabulary'
+                ? 'bg-zinc-800 text-zinc-100'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+            }`}
+          >
+            <BookOpen size={16} className={activeModule === 'vocabulary' ? 'text-violet-400' : 'text-zinc-600'} />
+            Vocabulary
+          </button>
+          <button
+            onClick={() => setActiveModule('grammar')}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+              activeModule === 'grammar'
+                ? 'bg-zinc-800 text-zinc-100'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+            }`}
+          >
+            <Mic size={16} className={activeModule === 'grammar' ? 'text-amber-400' : 'text-zinc-600'} />
+            Grammar
+          </button>
+        </nav>
+
+        {/* Main content */}
+        <main className="flex-1 px-8 py-10 overflow-y-auto">
+          {activeModule === 'grammar' ? (
+            <GrammarModule userId={user?.id ?? null} locale={locale} />
+          ) : wordsLoading ? (
+            <div className="text-center text-zinc-500">Loading...</div>
+          ) : words.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-zinc-500 mb-4">No words yet</p>
+              {!isReadOnly && (
+                <button onClick={() => setShowQuickAdd(true)} className="text-zinc-400 hover:text-zinc-100 underline">
+                  Add your first word
+                </button>
+              )}
+            </div>
+          ) : (
+            <WordBank
+              words={words}
+              updateWord={updateWord}
+              deleteWord={deleteWord}
+              archiveWord={archiveWord}
+              unarchiveWord={unarchiveWord}
+              bulkArchiveWords={bulkArchiveWords}
+              practiceWord={practiceWord}
+              setReviewDate={setReviewDate}
+              isReadOnly={isReadOnly}
+              weeklyMode={weeklyView === 'select'}
+              weeklySelected={weeklyState.selected}
+              onToggleWeeklySelect={handleToggleWeeklySelect}
+              onWeeklyClose={() => {
+                setWeeklyView(weeklyState.selected.length > 0 ? 'review' : 'off');
+              }}
+              queueSelectMode={showQueueSelect}
+              queueSelected={queueSelected}
+              onToggleQueueSelect={handleToggleQueueSelect}
+              onQueueSelectConfirm={handleQueueSelectConfirm}
+              onQueueSelectClose={() => { setShowQueueSelect(false); setQueueSelected([]); }}
+            />
+          )}
+        </main>
+      </div>
 
       {/* WeeklyReview hidden — not in use (added 2026-04-24, ask to delete after ~1 week)
       {weeklyView === 'review' && (
