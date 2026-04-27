@@ -317,6 +317,7 @@ export default function GrammarModule({ userId, locale, view, onSessionEnded }: 
 
   const handleStartSession = async () => {
     await startSession();
+    start();
   };
 
   const handleAddToSession = async () => {
