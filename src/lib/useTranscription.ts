@@ -122,7 +122,15 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   const start = useCallback(async () => {
     if (!supported) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation:  true,   // remove room echo
+          noiseSuppression:  true,   // reduce background noise
+          autoGainControl:   true,   // normalise volume levels
+          sampleRate:        16000,  // Whisper's native rate — no resampling needed
+          channelCount:      1,      // mono is sufficient, keeps file smaller
+        },
+      });
       streamRef.current    = stream;
       allChunksRef.current = [];
       liveTextRef.current  = '';
@@ -132,7 +140,10 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
         .find(t => MediaRecorder.isTypeSupported(t)) ?? '';
       mimeTypeRef.current = mimeType || 'audio/webm';
 
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const recorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType, audioBitsPerSecond: 128_000 } : undefined,
+      );
       recorderRef.current = recorder;
 
       recorder.ondataavailable = (e) => {

@@ -34,11 +34,21 @@ Deno.serve(async (req: Request) => {
     const blob = new Blob([bytes], { type: mimeType ?? "audio/webm" });
 
     // Send to Groq Whisper
+    // Prompt seeds Whisper with context so it capitalises properly, uses
+    // punctuation, and doesn't hallucinate filler-word completions.
+    const prompt =
+      "This is a spoken English language-learning exercise. " +
+      "The speaker is a non-native English speaker practising conversational or academic English. " +
+      "Transcribe accurately with correct punctuation and capitalisation. " +
+      "Preserve the speaker's words exactly — do not correct grammar.";
+
     const form = new FormData();
     form.append("file", blob, "recording.webm");
-    form.append("model", "whisper-large-v3-turbo");
+    form.append("model", "whisper-large-v3");   // full model — more accurate than turbo
     form.append("language", language ?? "en");
     form.append("response_format", "text");
+    form.append("prompt", prompt);
+    form.append("temperature", "0");             // deterministic output
 
     const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
