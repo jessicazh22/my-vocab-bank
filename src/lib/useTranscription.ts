@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-const GROQ_API_KEY = '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';
+const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 // How often to send cumulative audio to Whisper while recording (ms)
 const FLUSH_INTERVAL_MS = 8000;
@@ -16,42 +17,46 @@ export interface UseTranscriptionReturn {
   reset: () => void;
 }
 
-async function whisper(blob: Blob, lang: string): Promise<string> {
+async function transcribeViaEdge(blob: Blob, mimeType: string, lang: string): Promise<string> {
   try {
-    const form = new FormData();
-    // Groq requires a filename with a supported extension
-    form.append('file', blob, 'recording.webm');
-    form.append('model', 'whisper-large-v3-turbo');
-    form.append('language', lang);
-    form.append('response_format', 'text');
+    // Convert blob → base64
+    const arrayBuffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    bytes.forEach(b => binary += String.fromCharCode(b));
+    const audioBase64 = btoa(binary);
 
-    const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/transcribe-audio`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
-      body: form,
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ audioBase64, mimeType, language: lang }),
     });
 
     if (!res.ok) {
-      console.error('Whisper HTTP error', res.status, await res.text());
+      console.error('transcribe-audio error:', res.status, await res.text());
       return '';
     }
-    return (await res.text()).trim();
+
+    const { transcript } = await res.json() as { transcript: string };
+    return transcript ?? '';
   } catch (e) {
-    console.error('Whisper fetch failed:', e);
+    console.error('transcribeViaEdge failed:', e);
     return '';
   }
 }
 
 export function useTranscription(locale: string = 'en-AU'): UseTranscriptionReturn {
-  const [transcript, setTranscript]           = useState('');
-  const [isListening, setIsListening]         = useState(false);
-  const [isTranscribing, setIsTranscribing]   = useState(false);
-  const [durationSec, setDurationSec]         = useState(0);
+  const [transcript, setTranscript]         = useState('');
+  const [isListening, setIsListening]       = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [durationSec, setDurationSec]       = useState(0);
 
   const recorderRef   = useRef<MediaRecorder | null>(null);
   const streamRef     = useRef<MediaStream | null>(null);
-  // ALL chunks from the start — needed because the webm header is only in chunk[0]
-  const allChunksRef  = useRef<Blob[]>([]);
+  const allChunksRef  = useRef<Blob[]>([]);   // cumulative — webm header always in chunk[0]
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mimeTypeRef   = useRef('audio/webm');
@@ -65,20 +70,20 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
   }, []);
 
-  // Sends ALL audio collected so far to Whisper and replaces the transcript.
-  // Cumulative send solves the webm header problem — chunk[0] always included.
+  // Sends ALL audio collected so far to Whisper — cumulative ensures the
+  // webm container header (chunk[0]) is always included.
   const flushAll = useCallback(async () => {
     if (allChunksRef.current.length === 0) return;
     const blob = new Blob([...allChunksRef.current], { type: mimeTypeRef.current });
-    const text = await whisper(blob, lang);
-    if (text) setTranscript(text); // replace — Whisper re-transcribes the full audio
+    const text = await transcribeViaEdge(blob, mimeTypeRef.current, lang);
+    if (text) setTranscript(text);
   }, [lang]);
 
   const start = useCallback(async () => {
     if (!supported) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current   = stream;
+      streamRef.current    = stream;
       allChunksRef.current = [];
 
       const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
@@ -95,15 +100,14 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       recorder.onstop = async () => {
         streamRef.current?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
-        // Final flush — full audio, highest accuracy
-        await flushAll();
+        await flushAll(); // final full-audio transcription
         setIsTranscribing(false);
       };
 
-      recorder.start(250); // small timeslice — chunks arrive quickly
+      recorder.start(250);
       setIsListening(true);
       setIsTranscribing(false);
-      setDurationSec(0); // ← reset timer for each new recording
+      setDurationSec(0);
 
       timerRef.current      = setInterval(() => setDurationSec(s => s + 1), 1000);
       flushTimerRef.current = setInterval(flushAll, FLUSH_INTERVAL_MS);
@@ -115,11 +119,9 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
 
   const stop = useCallback(() => {
     stopTimers();
-    // Set isTranscribing BEFORE isListening → false so the panel stays visible
-    // while the final Whisper call runs (onstop is async)
-    setIsTranscribing(true);
+    setIsTranscribing(true); // keep panel visible while onstop runs async
     setIsListening(false);
-    recorderRef.current?.stop(); // triggers onstop async
+    recorderRef.current?.stop();
     recorderRef.current = null;
   }, [stopTimers]);
 
