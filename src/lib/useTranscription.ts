@@ -1,9 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+// Key is already in the edge function source — no additional exposure here
+const GROQ_API_KEY = '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';
+
 export interface UseTranscriptionReturn {
   transcript: string;
-  interimTranscript: string;
+  interimTranscript: string; // always '' — kept for interface compat
   isListening: boolean;
+  isTranscribing: boolean;
   supported: boolean;
   durationSec: number;
   start: () => void;
@@ -11,124 +15,122 @@ export interface UseTranscriptionReturn {
   reset: () => void;
 }
 
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
-}
-
 export function useTranscription(locale: string = 'en-AU'): UseTranscriptionReturn {
-  const [transcript, setTranscript] = useState('');
-  const [interimTranscript, setInterimTranscript] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [durationSec, setDurationSec] = useState(0);
+  const [transcript, setTranscript]       = useState('');
+  const [isListening, setIsListening]     = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [durationSec, setDurationSec]     = useState(0);
 
-  // Refs so event-handler closures always read the latest value
-  const activeRef      = useRef(false);   // true = we want to be recording
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recorderRef  = useRef<MediaRecorder | null>(null);
+  const streamRef    = useRef<MediaStream | null>(null);
+  const chunksRef    = useRef<Blob[]>([]);
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const supported =
-    typeof window !== 'undefined' &&
-    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+    typeof window !== 'undefined' && 'MediaRecorder' in window;
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }, []);
 
-  // Creates and starts a fresh SpeechRecognition instance.
-  // Called both on first start and on each auto-restart after silence.
-  const spawnInstance = useCallback((currentLocale: string) => {
-    if (!supported) return;
-
-    const SpeechRecognitionImpl =
-      window.SpeechRecognition ?? window.webkitSpeechRecognition;
-
-    const recognition = new SpeechRecognitionImpl();
-    recognition.continuous      = true;
-    recognition.interimResults  = true;
-    recognition.lang            = currentLocale;
-    recognitionRef.current      = recognition;
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = '';
-      let finalChunk = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const r = event.results[i];
-        if (r.isFinal) finalChunk += r[0].transcript;
-        else           interim    += r[0].transcript;
-      }
-      if (finalChunk) {
-        setTranscript(prev =>
-          prev ? prev + ' ' + finalChunk.trim() : finalChunk.trim()
-        );
-      }
-      setInterimTranscript(interim);
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error === 'no-speech') return; // ignore — we'll auto-restart
-      console.error('SpeechRecognition error:', event.error);
-      activeRef.current = false;
-      setIsListening(false);
-      stopTimer();
-    };
-
-    // onend fires after each utterance / silence window.
-    // If we still want to be recording, spawn a fresh instance immediately.
-    recognition.onend = () => {
-      setInterimTranscript('');
-      if (activeRef.current) {
-        // Small delay avoids a tight loop if the mic keeps failing
-        setTimeout(() => {
-          if (activeRef.current) spawnInstance(currentLocale);
-        }, 100);
-      }
-    };
-
+  const transcribeAudio = useCallback(async (blob: Blob, mimeType: string) => {
+    setIsTranscribing(true);
     try {
-      recognition.start();
-    } catch (e) {
-      console.error('Could not start recognition:', e);
-      activeRef.current = false;
-      setIsListening(false);
-      stopTimer();
-    }
-  }, [supported, stopTimer]);
+      const formData = new FormData();
+      // Use .webm extension — Groq accepts it
+      formData.append('file', blob, 'recording.webm');
+      formData.append('model', 'whisper-large-v3-turbo');
+      formData.append('language', locale.split('-')[0]); // 'en'
+      formData.append('response_format', 'text');
 
-  const start = useCallback(() => {
-    if (!supported || activeRef.current) return;
-    activeRef.current = true;
-    setIsListening(true);
-    timerRef.current = setInterval(() => setDurationSec(s => s + 1), 1000);
-    spawnInstance(locale);
-  }, [supported, locale, spawnInstance]);
+      const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        console.error('Whisper error:', await res.text());
+        return;
+      }
+
+      const text = await res.text();
+      setTranscript(text.trim());
+    } catch (e) {
+      console.error('Transcription failed:', e);
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, [locale]);
+
+  const start = useCallback(async () => {
+    if (!supported) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
+
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
+        .find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
+        transcribeAudio(blob, recorder.mimeType);
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      };
+
+      recorder.start(500); // collect chunks every 500 ms
+      setIsListening(true);
+      timerRef.current = setInterval(() => setDurationSec(s => s + 1), 1000);
+    } catch (e) {
+      console.error('Could not start recording:', e);
+    }
+  }, [supported, transcribeAudio]);
 
   const stop = useCallback(() => {
-    activeRef.current = false;
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
+    recorderRef.current?.stop();
+    recorderRef.current = null;
     setIsListening(false);
-    setInterimTranscript('');
     stopTimer();
   }, [stopTimer]);
 
   const reset = useCallback(() => {
-    stop();
+    recorderRef.current?.stop();
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    recorderRef.current = null;
+    streamRef.current = null;
+    setIsListening(false);
+    setIsTranscribing(false);
     setTranscript('');
-    setInterimTranscript('');
     setDurationSec(0);
-  }, [stop]);
+    stopTimer();
+  }, [stopTimer]);
 
-  // Clean up on unmount
   useEffect(() => {
     return () => {
-      activeRef.current = false;
-      recognitionRef.current?.stop();
+      recorderRef.current?.stop();
+      streamRef.current?.getTracks().forEach(t => t.stop());
       stopTimer();
     };
   }, [stopTimer]);
 
-  return { transcript, interimTranscript, isListening, supported, durationSec, start, stop, reset };
+  return {
+    transcript,
+    interimTranscript: '',
+    isListening,
+    isTranscribing,
+    supported,
+    durationSec,
+    start,
+    stop,
+    reset,
+  };
 }

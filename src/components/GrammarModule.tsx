@@ -17,8 +17,8 @@ const FEATURES = [
 export default function GrammarModule({ userId, locale }: Props) {
   const {
     transcript,
-    interimTranscript,
     isListening,
+    isTranscribing,
     supported,
     durationSec,
     start,
@@ -30,15 +30,13 @@ export default function GrammarModule({ userId, locale }: Props) {
     ? transcript.trim().split(/\s+/).filter(Boolean).length
     : 0;
 
-  // ── Recording state ─────────────────────────────────────────────────────────
-  if (isListening) {
+  // ── Recording or transcribing ────────────────────────────────────────────────
+  if (isListening || isTranscribing) {
     return (
       <TranscriptPanel
-        transcript={transcript}
-        interimTranscript={interimTranscript}
         isListening={isListening}
+        isTranscribing={isTranscribing}
         durationSec={durationSec}
-        wordCount={wordCount}
         onStop={stop}
       />
     );
