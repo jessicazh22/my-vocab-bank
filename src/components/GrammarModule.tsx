@@ -321,6 +321,7 @@ export default function GrammarModule({ userId, locale, view, onSessionEnded }: 
   const [savedDuration, setSavedDuration]         = useState(0);
   const [adding, setAdding]                       = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [speaker, setSpeaker]                     = useState<string>('Teacher');
 
   useEffect(() => {
     if (transcript) {
@@ -341,7 +342,7 @@ export default function GrammarModule({ userId, locale, view, onSessionEnded }: 
   const handleAddToSession = async () => {
     if (!editedTranscript.trim() || adding) return;
     setAdding(true);
-    await addRecording(editedTranscript.trim(), savedDuration);
+    await addRecording(editedTranscript.trim(), savedDuration, speaker);
     setAdding(false);
     reset();
   };
@@ -425,7 +426,27 @@ export default function GrammarModule({ userId, locale, view, onSessionEnded }: 
         />
         <p className="text-xs text-zinc-600 -mt-2">Fix any transcription errors before saving.</p>
 
-        <div className="flex justify-end pt-1">
+        <div className="flex items-center justify-between pt-1">
+          {/* Speaker selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-600">Speaker:</span>
+            {['Teacher', 'Student'].map(s => (
+              <button
+                key={s}
+                onClick={() => setSpeaker(s)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  speaker === s
+                    ? s === 'Teacher'
+                      ? 'bg-amber-900/40 text-amber-300 border border-amber-800/40'
+                      : 'bg-sky-900/40 text-sky-300 border border-sky-800/40'
+                    : 'text-zinc-600 hover:text-zinc-400 border border-transparent'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={handleAddToSession}
             disabled={!editedTranscript.trim() || adding}

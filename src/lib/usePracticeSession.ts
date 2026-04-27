@@ -7,7 +7,7 @@ interface UsePracticeSessionReturn {
   activeSession:   PracticeSession | null;
   loading:         boolean;
   startSession:    () => Promise<PracticeSession>;
-  addRecording:    (transcript: string, durationSec: number) => Promise<GrammarSession>;
+  addRecording:    (transcript: string, durationSec: number, speaker?: string | null) => Promise<GrammarSession>;
   removeRecording: (recordingId: string) => Promise<void>;
   endSession:      () => Promise<void>;
   discardSession:  () => void;
@@ -28,6 +28,7 @@ type RawSession = {
     created_at: string;
     practice_session_id: string | null;
     sort_order: number;
+    speaker: string | null;
   }> | null;
 };
 
@@ -43,6 +44,7 @@ function makeLocalRecording(
   durationSec: number,
   practiceSessionId: string,
   sortOrder: number,
+  speaker: string | null = null,
 ): GrammarSession {
   return {
     id:                  crypto.randomUUID(),
@@ -53,6 +55,7 @@ function makeLocalRecording(
     created_at:          new Date().toISOString(),
     practice_session_id: practiceSessionId,
     sort_order:          sortOrder,
+    speaker,
   };
 }
 
@@ -71,7 +74,7 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
         id, created_at, completed_at,
         grammar_sessions (
           id, transcript, duration_sec, word_count, analyzed_at,
-          created_at, practice_session_id, sort_order
+          created_at, practice_session_id, sort_order, speaker
         )
       `)
       .eq('user_id', userId)
@@ -86,10 +89,9 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
   }, [userId]);
 
   // ── startSession ─────────────────────────────────────────────────────────
-  // Creates a LOCAL session immediately so the UI is never blocked waiting
-  // for a DB round-trip. The DB record is created in the background; if it
-  // fails (e.g. the migration hasn't been applied yet) the local session
-  // keeps working — recordings will still be captured in component state.
+  // Awaits the DB insert so activeSession.id is the real DB uuid before any
+  // recording is added — required because grammar_sessions.practice_session_id
+  // has a FK constraint and will reject a local placeholder uuid.
   const startSession = useCallback(async (): Promise<PracticeSession> => {
     const local: PracticeSession = {
       id:           crypto.randomUUID(),
@@ -101,28 +103,20 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
 
     if (!userId) return local;
 
-    // Fire-and-forget DB persist
-    supabase
+    const { data, error } = await supabase
       .from('practice_sessions')
       .insert({ user_id: userId })
       .select('id, created_at, completed_at')
-      .single()
-      .then(({ data, error }) => {
-        if (error) {
-          console.warn('Could not persist session to DB (migration pending?):', error.message);
-          return;
-        }
-        if (data) {
-          // Swap the local UUID for the real DB id so subsequent DB ops work
-          setActiveSession(prev =>
-            prev?.id === local.id
-              ? { ...prev, id: data.id, created_at: data.created_at }
-              : prev
-          );
-        }
-      });
+      .single();
 
-    return local;
+    if (error) {
+      console.warn('Could not persist session to DB:', error.message);
+      return local;
+    }
+
+    const withDbId: PracticeSession = { ...local, id: data.id, created_at: data.created_at };
+    setActiveSession(withDbId);
+    return withDbId;
   }, [userId]);
 
   // ── addRecording ──────────────────────────────────────────────────────────
@@ -130,10 +124,11 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
   const addRecording = useCallback(async (
     transcript: string,
     durationSec: number,
+    speaker: string | null = null,
   ): Promise<GrammarSession> => {
     const sortOrder = activeSession?.recordings.length ?? 0;
     const sessionId = activeSession?.id ?? crypto.randomUUID();
-    const local     = makeLocalRecording(transcript, durationSec, sessionId, sortOrder);
+    const local     = makeLocalRecording(transcript, durationSec, sessionId, sortOrder, speaker);
 
     // Optimistic update — visible immediately
     setActiveSession(prev => prev
@@ -152,12 +147,13 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
         word_count:          local.word_count,
         practice_session_id: activeSession.id,
         sort_order:          sortOrder,
+        speaker,
       })
-      .select('id, transcript, duration_sec, word_count, analyzed_at, created_at, practice_session_id, sort_order')
+      .select('id, transcript, duration_sec, word_count, analyzed_at, created_at, practice_session_id, sort_order, speaker')
       .single();
 
     if (error) {
-      console.warn('Recording not saved to DB (migration pending?):', error.message);
+      console.warn('Recording not saved to DB:', error.message);
       return local;
     }
 

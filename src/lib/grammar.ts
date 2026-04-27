@@ -74,6 +74,7 @@ export interface GrammarSession {
   created_at: string;
   practice_session_id: string | null;
   sort_order: number;
+  speaker: string | null;
 }
 
 /** Outer container — one practice session holds 1-N recordings */

@@ -15,6 +15,28 @@ function formatDuration(sec: number | null): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+const SPEAKER_STYLES: Record<string, { badge: string; bar: string; label: string }> = {
+  Teacher: {
+    badge: 'bg-amber-900/30 text-amber-300 border border-amber-800/40',
+    bar:   'bg-amber-700/40',
+    label: 'Teacher',
+  },
+  Student: {
+    badge: 'bg-sky-900/30 text-sky-300 border border-sky-800/40',
+    bar:   'bg-sky-700/40',
+    label: 'Student',
+  },
+};
+
+function getSpeakerStyle(speaker: string | null) {
+  if (!speaker) return null;
+  return SPEAKER_STYLES[speaker] ?? {
+    badge: 'bg-violet-900/30 text-violet-300 border border-violet-800/40',
+    bar:   'bg-violet-700/40',
+    label: speaker,
+  };
+}
+
 export default function SessionDetail({ session, onBack, onUpdateRecording }: Props) {
   const [editing, setEditing]   = useState(false);
   const [drafts,  setDrafts]    = useState<Record<string, string>>({});
@@ -53,6 +75,9 @@ export default function SessionDetail({ session, onBack, onUpdateRecording }: Pr
   const hasChanges = session.recordings.some(
     r => drafts[r.id] !== undefined && drafts[r.id] !== r.transcript,
   );
+
+  // Check if any recording has a speaker label — if so, use speaker-aware layout
+  const hasSpeakers = session.recordings.some(r => r.speaker);
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-7">
@@ -107,38 +132,79 @@ export default function SessionDetail({ session, onBack, onUpdateRecording }: Pr
       </div>
 
       {/* Combined transcript */}
-      <div>
-        {session.recordings.map((rec, i) => (
-          <div key={rec.id}>
+      <div className="flex flex-col">
+        {session.recordings.map((rec, i) => {
+          const style = getSpeakerStyle(rec.speaker);
 
-            {/* Inter-recording divider */}
-            {i > 0 && (
-              <div className="flex items-center gap-3 my-8">
-                <div className="h-px flex-1 bg-zinc-800" />
-                <span className="text-[11px] text-zinc-600">
-                  Recording {i + 1}{rec.duration_sec ? ` · ${formatDuration(rec.duration_sec)}` : ''}
-                </span>
-                <div className="h-px flex-1 bg-zinc-800" />
-              </div>
-            )}
+          return (
+            <div key={rec.id}>
 
-            {editing ? (
-              <textarea
-                value={drafts[rec.id] ?? rec.transcript}
-                onChange={e => setDrafts(prev => ({ ...prev, [rec.id]: e.target.value }))}
-                rows={Math.max(4, Math.ceil((drafts[rec.id] ?? rec.transcript).length / 68))}
-                className="w-full bg-zinc-800/40 border border-zinc-700/60 rounded-xl px-5 py-4
-                  text-sm text-zinc-200 leading-relaxed resize-none
-                  focus:outline-none focus:border-zinc-500 transition-colors"
-              />
-            ) : (
-              <p className="text-sm text-zinc-200 leading-[1.85] whitespace-pre-wrap">
-                {rec.transcript}
-              </p>
-            )}
+              {/* Inter-recording divider */}
+              {i > 0 && (
+                <div className="flex items-center gap-3 my-7">
+                  <div className="h-px flex-1 bg-zinc-800" />
+                  {rec.duration_sec ? (
+                    <span className="text-[11px] text-zinc-600">
+                      {formatDuration(rec.duration_sec)}
+                    </span>
+                  ) : null}
+                  <div className="h-px flex-1 bg-zinc-800" />
+                </div>
+              )}
 
-          </div>
-        ))}
+              {/* Speaker-aware block */}
+              {hasSpeakers ? (
+                <div className={`flex gap-4 ${i > 0 ? '' : ''}`}>
+                  {/* Left accent bar + speaker label */}
+                  <div className="flex flex-col items-center gap-2 pt-0.5 shrink-0">
+                    <div className={`w-0.5 rounded-full flex-1 min-h-[1.5rem] ${style?.bar ?? 'bg-zinc-700'}`} />
+                  </div>
+
+                  <div className="flex flex-col gap-2 flex-1 min-w-0">
+                    {/* Speaker badge */}
+                    {style && (
+                      <span className={`self-start text-[11px] font-medium px-2 py-0.5 rounded-md ${style.badge}`}>
+                        {style.label}
+                      </span>
+                    )}
+
+                    {editing ? (
+                      <textarea
+                        value={drafts[rec.id] ?? rec.transcript}
+                        onChange={e => setDrafts(prev => ({ ...prev, [rec.id]: e.target.value }))}
+                        rows={Math.max(4, Math.ceil((drafts[rec.id] ?? rec.transcript).length / 65))}
+                        className="w-full bg-zinc-800/40 border border-zinc-700/60 rounded-xl px-5 py-4
+                          text-sm text-zinc-200 leading-relaxed resize-none
+                          focus:outline-none focus:border-zinc-500 transition-colors"
+                      />
+                    ) : (
+                      <p className="text-sm text-zinc-200 leading-[1.85] whitespace-pre-wrap">
+                        {rec.transcript}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* No speakers — plain layout */
+                editing ? (
+                  <textarea
+                    value={drafts[rec.id] ?? rec.transcript}
+                    onChange={e => setDrafts(prev => ({ ...prev, [rec.id]: e.target.value }))}
+                    rows={Math.max(4, Math.ceil((drafts[rec.id] ?? rec.transcript).length / 68))}
+                    className="w-full bg-zinc-800/40 border border-zinc-700/60 rounded-xl px-5 py-4
+                      text-sm text-zinc-200 leading-relaxed resize-none
+                      focus:outline-none focus:border-zinc-500 transition-colors"
+                  />
+                ) : (
+                  <p className="text-sm text-zinc-200 leading-[1.85] whitespace-pre-wrap">
+                    {rec.transcript}
+                  </p>
+                )
+              )}
+
+            </div>
+          );
+        })}
       </div>
 
     </div>
