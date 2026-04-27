@@ -12,6 +12,7 @@ interface UsePracticeSessionReturn {
   endSession:      () => Promise<void>;
   discardSession:  () => void;
   deleteSession:   (sessionId: string) => Promise<void>;
+  updateRecording: (recordingId: string, transcript: string) => Promise<void>;
 }
 
 type RawSession = {
@@ -218,5 +219,22 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
     if (error) console.warn('Could not delete session:', error.message);
   }, []);
 
-  return { sessions, activeSession, loading, startSession, addRecording, removeRecording, endSession, discardSession, deleteSession };
+  // ── updateRecording ───────────────────────────────────────────────────────
+  const updateRecording = useCallback(async (recordingId: string, transcript: string): Promise<void> => {
+    const wordCount = transcript.trim() ? transcript.trim().split(/\s+/).filter(Boolean).length : 0;
+    // Optimistic update in sessions list
+    setSessions(prev => prev.map(s => ({
+      ...s,
+      recordings: s.recordings.map(r =>
+        r.id === recordingId ? { ...r, transcript, word_count: wordCount } : r
+      ),
+    })));
+    const { error } = await supabase
+      .from('grammar_sessions')
+      .update({ transcript, word_count: wordCount })
+      .eq('id', recordingId);
+    if (error) console.warn('Could not update recording:', error.message);
+  }, []);
+
+  return { sessions, activeSession, loading, startSession, addRecording, removeRecording, endSession, discardSession, deleteSession, updateRecording };
 }

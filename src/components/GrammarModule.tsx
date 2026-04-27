@@ -3,6 +3,7 @@ import { Mic, CheckCircle2, Clock, X, ChevronRight } from 'lucide-react';
 import { useTranscription } from '../lib/useTranscription';
 import { usePracticeSession } from '../lib/usePracticeSession';
 import TranscriptPanel from './TranscriptPanel';
+import SessionDetail from './SessionDetail';
 import type { PracticeSession } from '../lib/grammar';
 
 interface Props {
@@ -43,9 +44,11 @@ function formatDuration(sec: number | null): string {
 function CompletedSessionRow({
   session,
   onDelete,
+  onSelect,
 }: {
   session: PracticeSession;
   onDelete: () => void;
+  onSelect: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
 
@@ -56,7 +59,14 @@ function CompletedSessionRow({
   const truncated     = (first?.transcript.length ?? 0) > 160;
 
   return (
-    <div className="group flex flex-col gap-2.5 px-4 py-4 rounded-xl bg-zinc-800/40 border border-zinc-700/50 hover:border-zinc-600/60 transition-colors">
+    <div
+      className="group flex flex-col gap-2.5 px-4 py-4 rounded-xl bg-zinc-800/40 border border-zinc-700/50 hover:border-zinc-600/60 transition-colors cursor-pointer"
+      onClick={e => {
+        // Don't trigger open if clicking the delete button area
+        if ((e.target as HTMLElement).closest('button')) return;
+        onSelect();
+      }}
+    >
       {/* Meta row */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-xs text-zinc-500">
@@ -79,7 +89,7 @@ function CompletedSessionRow({
           </div>
         ) : (
           <button
-            onClick={() => setConfirming(true)}
+            onClick={e => { e.stopPropagation(); setConfirming(true); }}
             className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-rose-400 transition-all"
           >
             <X size={13} />
@@ -103,11 +113,13 @@ function CompletedSessionsList({
   sessions,
   loading,
   onDelete,
+  onSelect,
 }: {
   userId: string | null;
   sessions: PracticeSession[];
   loading: boolean;
   onDelete: (id: string) => void;
+  onSelect: (id: string) => void;
 }) {
   if (!userId) {
     return (
@@ -133,7 +145,12 @@ function CompletedSessionsList({
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-2">
       {sessions.map(s => (
-        <CompletedSessionRow key={s.id} session={s} onDelete={() => onDelete(s.id)} />
+        <CompletedSessionRow
+          key={s.id}
+          session={s}
+          onDelete={() => onDelete(s.id)}
+          onSelect={() => onSelect(s.id)}
+        />
       ))}
     </div>
   );
@@ -297,12 +314,13 @@ export default function GrammarModule({ userId, locale, view, onSessionEnded }: 
   const {
     sessions, activeSession, loading,
     startSession, addRecording, removeRecording,
-    endSession, discardSession, deleteSession,
+    endSession, discardSession, deleteSession, updateRecording,
   } = usePracticeSession(userId);
 
-  const [editedTranscript, setEditedTranscript] = useState('');
-  const [savedDuration, setSavedDuration]       = useState(0);
-  const [adding, setAdding]                     = useState(false);
+  const [editedTranscript, setEditedTranscript]   = useState('');
+  const [savedDuration, setSavedDuration]         = useState(0);
+  const [adding, setAdding]                       = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (transcript) {
@@ -334,17 +352,33 @@ export default function GrammarModule({ userId, locale, view, onSessionEnded }: 
 
   const handleEndSession = async () => {
     await endSession();
+    setSelectedSessionId(null);
     onSessionEnded();
   };
 
   // ── 1. Sessions view (controlled by sidebar nav) ──────────────────────────
   if (view === 'sessions') {
+    const selectedSession = selectedSessionId
+      ? sessions.find(s => s.id === selectedSessionId) ?? null
+      : null;
+
+    if (selectedSession) {
+      return (
+        <SessionDetail
+          session={selectedSession}
+          onBack={() => setSelectedSessionId(null)}
+          onUpdateRecording={updateRecording}
+        />
+      );
+    }
+
     return (
       <CompletedSessionsList
         userId={userId}
         sessions={sessions}
         loading={loading}
-        onDelete={deleteSession}
+        onDelete={id => { deleteSession(id); if (selectedSessionId === id) setSelectedSessionId(null); }}
+        onSelect={setSelectedSessionId}
       />
     );
   }
