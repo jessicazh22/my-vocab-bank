@@ -18,6 +18,7 @@ const FEATURES = [
 export default function GrammarModule({ userId, locale }: Props) {
   const {
     transcript,
+    interimTranscript,
     isListening,
     isTranscribing,
     supported,
@@ -43,6 +44,7 @@ export default function GrammarModule({ userId, locale }: Props) {
     return (
       <TranscriptPanel
         transcript={transcript}
+        interimTranscript={interimTranscript}
         isListening={isListening}
         isTranscribing={isTranscribing}
         durationSec={durationSec}
