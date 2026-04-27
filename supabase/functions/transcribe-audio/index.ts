@@ -14,10 +14,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { audioBase64, mimeType, language } = await req.json() as {
+    const { audioBase64, mimeType, language, prevTranscript } = await req.json() as {
       audioBase64: string;
       mimeType: string;
       language: string;
+      prevTranscript?: string;
     };
 
     if (!audioBase64) {
@@ -34,21 +35,22 @@ Deno.serve(async (req: Request) => {
     const blob = new Blob([bytes], { type: mimeType ?? "audio/webm" });
 
     // Send to Groq Whisper
-    // Prompt seeds Whisper with context so it capitalises properly, uses
-    // punctuation, and doesn't hallucinate filler-word completions.
-    const prompt =
-      "This is a spoken English language-learning exercise. " +
-      "The speaker is a non-native English speaker practising conversational or academic English. " +
-      "Transcribe accurately with correct punctuation and capitalisation. " +
-      "Preserve the speaker's words exactly — do not correct grammar.";
+    // If we have previous transcript, use it as the Whisper prompt so the
+    // model has continuity context. Otherwise seed with formatting instructions.
+    const basePrompt =
+      "English language learning session. Non-native speaker. " +
+      "Transcribe with correct punctuation and capitalisation.";
+    const prompt = prevTranscript
+      ? prevTranscript.slice(-200) // last ~200 chars gives Whisper enough context
+      : basePrompt;
 
     const form = new FormData();
     form.append("file", blob, "recording.webm");
-    form.append("model", "whisper-large-v3");   // full model — more accurate than turbo
+    form.append("model", "whisper-large-v3");
     form.append("language", language ?? "en");
     form.append("response_format", "text");
     form.append("prompt", prompt);
-    form.append("temperature", "0");             // deterministic output
+    form.append("temperature", "0");
 
     const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
