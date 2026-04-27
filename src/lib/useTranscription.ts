@@ -3,8 +3,6 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-// How often to send cumulative audio to Whisper while recording (ms)
-const FLUSH_INTERVAL_MS = 8000;
 
 export interface UseTranscriptionReturn {
   transcript: string;
@@ -54,24 +52,20 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [durationSec, setDurationSec]       = useState(0);
 
-  const recorderRef   = useRef<MediaRecorder | null>(null);
-  const streamRef     = useRef<MediaStream | null>(null);
-  const allChunksRef  = useRef<Blob[]>([]);   // cumulative — webm header always in chunk[0]
-  const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const mimeTypeRef   = useRef('audio/webm');
-  const lang          = locale.split('-')[0]; // 'en'
+  const recorderRef  = useRef<MediaRecorder | null>(null);
+  const streamRef    = useRef<MediaStream | null>(null);
+  const allChunksRef = useRef<Blob[]>([]);   // cumulative — webm header always in chunk[0]
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mimeTypeRef  = useRef('audio/webm');
+  const lang         = locale.split('-')[0]; // 'en'
 
   const supported =
     typeof window !== 'undefined' && 'MediaRecorder' in window;
 
-  const stopTimers = useCallback(() => {
-    if (timerRef.current)      { clearInterval(timerRef.current);      timerRef.current      = null; }
-    if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }, []);
 
-  // Sends ALL audio collected so far to Whisper — cumulative ensures the
-  // webm container header (chunk[0]) is always included.
   const flushAll = useCallback(async () => {
     if (allChunksRef.current.length === 0) return;
     const blob = new Blob([...allChunksRef.current], { type: mimeTypeRef.current });
@@ -109,8 +103,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       setIsTranscribing(false);
       setDurationSec(0);
 
-      timerRef.current      = setInterval(() => setDurationSec(s => s + 1), 1000);
-      flushTimerRef.current = setInterval(flushAll, FLUSH_INTERVAL_MS);
+      timerRef.current = setInterval(() => setDurationSec(s => s + 1), 1000);
 
     } catch (e) {
       console.error('Could not start recording:', e);
@@ -118,15 +111,15 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   }, [supported, flushAll]);
 
   const stop = useCallback(() => {
-    stopTimers();
+    stopTimer();
     setIsTranscribing(true); // keep panel visible while onstop runs async
     setIsListening(false);
     recorderRef.current?.stop();
     recorderRef.current = null;
-  }, [stopTimers]);
+  }, [stopTimer]);
 
   const reset = useCallback(() => {
-    stopTimers();
+    stopTimer();
     recorderRef.current?.stop();
     streamRef.current?.getTracks().forEach(t => t.stop());
     recorderRef.current  = null;
@@ -136,15 +129,15 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     setIsTranscribing(false);
     setTranscript('');
     setDurationSec(0);
-  }, [stopTimers]);
+  }, [stopTimer]);
 
   useEffect(() => {
     return () => {
       recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach(t => t.stop());
-      stopTimers();
+      stopTimer();
     };
-  }, [stopTimers]);
+  }, [stopTimer]);
 
   return { transcript, isListening, isTranscribing, supported, durationSec, start, stop, reset };
 }
