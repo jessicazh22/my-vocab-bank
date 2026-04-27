@@ -179,10 +179,10 @@ function App() {
   return (
     <div className="min-h-screen bg-zinc-900 flex flex-col">
       {/* Top header */}
-      <header className="border-b border-zinc-800 sticky top-0 bg-zinc-900/95 backdrop-blur z-40">
-        <div className="px-6 py-4">
+      <header className="border-b border-zinc-800/70 sticky top-0 bg-zinc-900/95 backdrop-blur z-40">
+        <div className="px-6 py-3.5">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-light text-zinc-100">
+            <h1 className="text-lg font-medium tracking-tight text-zinc-100">
               {activeModule === 'grammar' ? 'Grammar' : 'Vocabulary'}
             </h1>
 
@@ -267,29 +267,25 @@ function App() {
       {/* Body: sidebar + content */}
       <div className="flex flex-1">
         {/* Left sidebar nav */}
-        <nav className="w-48 shrink-0 border-r border-zinc-800 px-3 py-6 flex flex-col gap-1">
-          <button
-            onClick={() => setActiveModule('vocabulary')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
-              activeModule === 'vocabulary'
-                ? 'bg-zinc-800 text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
-            }`}
-          >
-            <BookOpen size={16} className={activeModule === 'vocabulary' ? 'text-violet-400' : 'text-zinc-600'} />
-            Vocabulary
-          </button>
-          <button
-            onClick={() => setActiveModule('grammar')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
-              activeModule === 'grammar'
-                ? 'bg-zinc-800 text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
-            }`}
-          >
-            <Mic size={16} className={activeModule === 'grammar' ? 'text-amber-400' : 'text-zinc-600'} />
-            Grammar
-          </button>
+        <nav className="w-52 shrink-0 border-r border-zinc-800/70 px-3 py-8 flex flex-col gap-0.5">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-3 mb-2">Modules</p>
+          {([
+            { id: 'vocabulary', label: 'Vocabulary', Icon: BookOpen, color: 'text-violet-400', activeBorder: 'border-l-violet-500' },
+            { id: 'grammar',    label: 'Grammar',    Icon: Mic,      color: 'text-amber-400',  activeBorder: 'border-l-amber-500'  },
+          ] as const).map(({ id, label, Icon, color, activeBorder }) => (
+            <button
+              key={id}
+              onClick={() => setActiveModule(id)}
+              className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 text-left border-l-2 ${
+                activeModule === id
+                  ? `bg-zinc-800/80 text-zinc-100 ${activeBorder}`
+                  : 'border-l-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+              }`}
+            >
+              <Icon size={15} className={activeModule === id ? color : 'text-zinc-600 transition-colors'} />
+              {label}
+            </button>
+          ))}
         </nav>
 
         {/* Main content */}
