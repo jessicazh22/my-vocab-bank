@@ -3,7 +3,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-// How often to send a new window of audio to Whisper (Brave / non-Web-Speech browsers)
+// Groq Whisper fallback — used when Deepgram WS fails
 const FLUSH_INTERVAL_MS = 6000;
 
 declare global {
@@ -25,6 +25,7 @@ export interface UseTranscriptionReturn {
   reset: () => void;
 }
 
+// ── Whisper fallback (Groq) ────────────────────────────────────────────────────
 async function transcribeViaEdge(
   blob: Blob,
   mimeType: string,
@@ -56,6 +57,16 @@ async function transcribeViaEdge(
   }
 }
 
+// ── Deepgram transcript message shape ─────────────────────────────────────────
+interface DeepgramResult {
+  type: string;
+  channel?: {
+    alternatives?: Array<{ transcript: string }>;
+  };
+  is_final?: boolean;
+  speech_final?: boolean;
+}
+
 export function useTranscription(locale: string = 'en-AU'): UseTranscriptionReturn {
   const [transcript, setTranscript]             = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -66,20 +77,24 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   // ── MediaRecorder ──────────────────────────────────────────────────────────
   const recorderRef   = useRef<MediaRecorder | null>(null);
   const streamRef     = useRef<MediaStream | null>(null);
-  const allChunksRef  = useRef<Blob[]>([]);    // full recording, for final Whisper call
-  const headerChunk   = useRef<Blob | null>(null); // first chunk = webm container header
-  const windowRef     = useRef<Blob[]>([]);    // chunks in the current 6-second window
-  const prevTextRef   = useRef('');            // accumulated Whisper text (for prompt context)
+  const allChunksRef  = useRef<Blob[]>([]);
+  const headerChunk   = useRef<Blob | null>(null);
+  const windowRef     = useRef<Blob[]>([]);
   const mimeTypeRef   = useRef('audio/webm');
 
-  // ── Web Speech API (Chrome) ────────────────────────────────────────────────
-  const speechRef     = useRef<SpeechRecognition | null>(null);
-  const liveTextRef   = useRef('');            // accumulated Web Speech finals
-  const isActiveRef   = useRef(false);
+  // ── Deepgram WebSocket ────────────────────────────────────────────────────
+  const dgSocketRef   = useRef<WebSocket | null>(null);
+  const committedRef  = useRef('');   // confirmed (is_final) Deepgram words
+  const usingDGRef    = useRef(false); // true once DG WS successfully opens
+
+  // ── Whisper fallback (for if DG fails) ────────────────────────────────────
+  const prevTextRef   = useRef('');
 
   // ── Timers ─────────────────────────────────────────────────────────────────
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const isActiveRef   = useRef(false);
 
   const lang = locale.split('-')[0];
 
@@ -90,16 +105,12 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
   }, []);
 
-  // ── Incremental Whisper flush (used when Web Speech API is unavailable) ────
-  // Each window = [headerChunk] + [new audio chunks].
-  // Prepending the header chunk gives Whisper a valid decodable webm file.
-  // We APPEND to the transcript (not replace) so there's no garbling.
+  // ── Whisper incremental flush (fallback when Deepgram unavailable) ─────────
   const flushWindow = useCallback(async () => {
-    // If Web Speech API is running, it's handling live display — skip Whisper flush
-    if (speechRef.current) return;
+    if (usingDGRef.current) return; // Deepgram is handling it
     if (!headerChunk.current || windowRef.current.length === 0) return;
 
-    const chunks = windowRef.current.splice(0); // grab + clear current window
+    const chunks = windowRef.current.splice(0);
     const blob   = new Blob([headerChunk.current, ...chunks], { type: mimeTypeRef.current });
     const text   = await transcribeViaEdge(blob, mimeTypeRef.current, lang, prevTextRef.current);
 
@@ -110,48 +121,63 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     }
   }, [lang]);
 
-  // ── Web Speech API for live word-by-word preview (Chrome / Edge) ──────────
-  const startSpeechRecognition = useCallback((loc: string) => {
-    const SpeechImpl = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (!SpeechImpl) return;
+  // ── Connect Deepgram WebSocket ─────────────────────────────────────────────
+  const connectDeepgram = useCallback(() => {
+    // Build wss:// URL for the edge function
+    const wsBase = SUPABASE_URL.replace(/^https?:\/\//, '');
+    const wsUrl  = `wss://${wsBase}/functions/v1/deepgram-stream?lang=${lang}&apikey=${SUPABASE_ANON_KEY}`;
 
-    const recog      = new SpeechImpl();
-    recog.continuous     = true;
-    recog.interimResults = true;
-    recog.lang           = loc;
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (e) {
+      console.warn('Deepgram WS connect failed:', e);
+      return;
+    }
 
-    recog.onresult = (event: SpeechRecognitionEvent) => {
-      let finalChunk = '';
-      let interim    = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) finalChunk += event.results[i][0].transcript;
-        else                          interim    += event.results[i][0].transcript;
-      }
-      if (finalChunk) {
-        liveTextRef.current = liveTextRef.current
-          ? `${liveTextRef.current} ${finalChunk.trim()}`
-          : finalChunk.trim();
-        setTranscript(liveTextRef.current);
-      }
-      setInterimTranscript(interim);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      usingDGRef.current = true;
+      dgSocketRef.current = ws;
+      // Stop Whisper flush timer — Deepgram is live
+      if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
     };
 
-    recog.onerror = () => {
-      // Brave / Safari — silently falls back to Whisper periodic flush
-      speechRef.current = null;
-      setInterimTranscript('');
+    ws.onmessage = (event) => {
+      if (!isActiveRef.current) return;
+      try {
+        const data = JSON.parse(event.data as string) as DeepgramResult;
+        if (data.type !== 'Results') return;
+
+        const alt     = data.channel?.alternatives?.[0];
+        const text    = alt?.transcript ?? '';
+        const isFinal = data.is_final ?? false;
+
+        if (isFinal && text) {
+          committedRef.current = committedRef.current
+            ? `${committedRef.current} ${text.trim()}`
+            : text.trim();
+          setTranscript(committedRef.current);
+          setInterimTranscript('');
+        } else if (!isFinal && text) {
+          setInterimTranscript(text.trim());
+        }
+      } catch { /* non-JSON heartbeat */ }
     };
 
-    recog.onend = () => {
-      setInterimTranscript('');
-      if (isActiveRef.current && speechRef.current) {
-        try { recog.start(); } catch { /* already restarting */ }
+    ws.onerror = () => {
+      console.warn('Deepgram WS error — falling back to Whisper');
+      usingDGRef.current  = false;
+      dgSocketRef.current = null;
+    };
+
+    ws.onclose = () => {
+      if (dgSocketRef.current === ws) {
+        dgSocketRef.current = null;
       }
     };
-
-    speechRef.current = recog;
-    try { recog.start(); } catch { speechRef.current = null; }
-  }, []);
+  }, [lang]);
 
   // ── start ─────────────────────────────────────────────────────────────────
   const start = useCallback(async () => {
@@ -166,12 +192,14 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
           channelCount:     1,
         },
       });
+
       streamRef.current    = stream;
       allChunksRef.current = [];
       windowRef.current    = [];
       headerChunk.current  = null;
       prevTextRef.current  = '';
-      liveTextRef.current  = '';
+      committedRef.current = '';
+      usingDGRef.current   = false;
       isActiveRef.current  = true;
 
       const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
@@ -187,48 +215,69 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       recorder.ondataavailable = (e) => {
         if (e.data.size <= 0) return;
         allChunksRef.current.push(e.data);
+
+        // Whisper fallback bookkeeping
         if (!headerChunk.current) {
-          // First chunk contains the webm container header — store separately
           headerChunk.current = e.data;
         } else {
           windowRef.current.push(e.data);
+        }
+
+        // Stream to Deepgram
+        if (usingDGRef.current && dgSocketRef.current?.readyState === WebSocket.OPEN) {
+          e.data.arrayBuffer().then(buf => {
+            if (dgSocketRef.current?.readyState === WebSocket.OPEN) {
+              dgSocketRef.current.send(buf);
+            }
+          });
         }
       };
 
       recorder.onstop = async () => {
         streamRef.current?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
-        // Final full-audio Whisper call — most accurate result
+
+        // Close Deepgram WS cleanly
+        if (dgSocketRef.current) {
+          try {
+            dgSocketRef.current.send(JSON.stringify({ type: 'CloseStream' }));
+            dgSocketRef.current.close();
+          } catch { /* ignore */ }
+          dgSocketRef.current = null;
+        }
+
+        // Final Whisper call — use as authoritative result (better accuracy than streaming)
         const blob = new Blob([...allChunksRef.current], { type: mimeTypeRef.current });
-        const text = await transcribeViaEdge(blob, mimeTypeRef.current, lang, prevTextRef.current);
+        const committedSoFar = committedRef.current;
+        const text = await transcribeViaEdge(blob, mimeTypeRef.current, lang, committedSoFar);
         if (text) setTranscript(text);
         setIsTranscribing(false);
       };
 
-      recorder.start(250);
+      recorder.start(250); // 250ms chunks for low-latency streaming
+
       setTranscript('');
       setInterimTranscript('');
       setIsListening(true);
       setIsTranscribing(false);
       setDurationSec(0);
 
-      timerRef.current      = setInterval(() => setDurationSec(s => s + 1), 1000);
-      // Periodic Whisper flush — kicks in if Web Speech API is unavailable (Brave)
-      flushTimerRef.current = setInterval(flushWindow, FLUSH_INTERVAL_MS);
+      timerRef.current = setInterval(() => setDurationSec(s => s + 1), 1000);
 
-      // Attempt Web Speech API for word-by-word live preview (Chrome / Edge)
-      startSpeechRecognition(locale);
+      // Start Deepgram — if it opens successfully, Whisper flush is suppressed
+      connectDeepgram();
+
+      // Whisper flush timer as fallback (no-op if Deepgram connects)
+      flushTimerRef.current = setInterval(flushWindow, FLUSH_INTERVAL_MS);
 
     } catch (e) {
       console.error('Could not start recording:', e);
     }
-  }, [supported, lang, locale, flushWindow, startSpeechRecognition]);
+  }, [supported, lang, flushWindow, connectDeepgram]);
 
   // ── stop ──────────────────────────────────────────────────────────────────
   const stop = useCallback(() => {
     isActiveRef.current = false;
-    speechRef.current?.stop();
-    speechRef.current = null;
     setInterimTranscript('');
     stopTimers();
     setIsTranscribing(true);
@@ -240,8 +289,15 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   // ── reset ─────────────────────────────────────────────────────────────────
   const reset = useCallback(() => {
     isActiveRef.current = false;
-    speechRef.current?.stop();
-    speechRef.current = null;
+
+    if (dgSocketRef.current) {
+      try {
+        dgSocketRef.current.send(JSON.stringify({ type: 'CloseStream' }));
+        dgSocketRef.current.close();
+      } catch { /* ignore */ }
+      dgSocketRef.current = null;
+    }
+
     recorderRef.current?.stop();
     streamRef.current?.getTracks().forEach(t => t.stop());
     recorderRef.current  = null;
@@ -250,7 +306,8 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     windowRef.current    = [];
     headerChunk.current  = null;
     prevTextRef.current  = '';
-    liveTextRef.current  = '';
+    committedRef.current = '';
+    usingDGRef.current   = false;
     stopTimers();
     setTranscript('');
     setInterimTranscript('');
@@ -262,7 +319,10 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   useEffect(() => {
     return () => {
       isActiveRef.current = false;
-      speechRef.current?.stop();
+      if (dgSocketRef.current) {
+        try { dgSocketRef.current.close(); } catch { /* ignore */ }
+        dgSocketRef.current = null;
+      }
       recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach(t => t.stop());
       stopTimers();
