@@ -1,6 +1,7 @@
 import { Square, Loader2 } from 'lucide-react';
 
 interface Props {
+  transcript: string;
   isListening: boolean;
   isTranscribing: boolean;
   durationSec: number;
@@ -13,41 +14,49 @@ function formatTime(sec: number): string {
   return `${m}:${s}`;
 }
 
-export default function TranscriptPanel({ isListening, isTranscribing, durationSec, onStop }: Props) {
-
-  // ── Transcribing state ──────────────────────────────────────────────────────
-  if (isTranscribing) {
-    return (
-      <div className="max-w-2xl mx-auto flex flex-col items-center gap-5 py-20">
-        <Loader2 size={28} className="text-amber-400 animate-spin" />
-        <p className="text-zinc-400 text-sm">Transcribing your recording…</p>
-      </div>
-    );
-  }
-
-  // ── Recording state ─────────────────────────────────────────────────────────
+export default function TranscriptPanel({
+  transcript,
+  isListening,
+  isTranscribing,
+  durationSec,
+  onStop,
+}: Props) {
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-6">
 
       {/* Status bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60" />
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
-          </span>
-          <span className="text-sm text-amber-400 font-medium">Recording</span>
+          {isListening && (
+            <>
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+              </span>
+              <span className="text-sm text-amber-400 font-medium">Recording</span>
+            </>
+          )}
+          {isTranscribing && (
+            <span className="flex items-center gap-2 text-sm text-zinc-500">
+              <Loader2 size={13} className="animate-spin" />
+              Transcribing…
+            </span>
+          )}
         </div>
         <span className="text-sm text-zinc-500 tabular-nums font-mono">
           {formatTime(durationSec)}
         </span>
       </div>
 
-      {/* Visual placeholder — no live transcript with MediaRecorder */}
-      <div className="min-h-48 bg-zinc-800/40 border border-zinc-700/60 rounded-xl px-5 py-4 flex items-center justify-center">
-        <p className="text-zinc-600 italic text-sm text-center leading-relaxed">
-          Speak naturally — your transcript will appear<br />once you stop recording.
-        </p>
+      {/* Transcript area */}
+      <div className="min-h-48 bg-zinc-800/40 border border-zinc-700/60 rounded-xl px-5 py-4 text-sm leading-relaxed">
+        {transcript ? (
+          <p className="text-zinc-200 whitespace-pre-wrap">{transcript}</p>
+        ) : (
+          <p className="text-zinc-600 italic">
+            Start speaking — your words will appear here every few seconds…
+          </p>
+        )}
       </div>
 
       {/* Stop */}

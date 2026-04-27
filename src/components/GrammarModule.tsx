@@ -34,6 +34,7 @@ export default function GrammarModule({ userId, locale }: Props) {
   if (isListening || isTranscribing) {
     return (
       <TranscriptPanel
+        transcript={transcript}
         isListening={isListening}
         isTranscribing={isTranscribing}
         durationSec={durationSec}
