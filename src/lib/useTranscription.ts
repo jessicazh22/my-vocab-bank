@@ -2,13 +2,13 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 
 const GROQ_API_KEY = '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';
 
-// How often to flush a chunk to Whisper while recording (ms)
-const CHUNK_INTERVAL_MS = 6000;
+// How often to send cumulative audio to Whisper while recording (ms)
+const FLUSH_INTERVAL_MS = 8000;
 
 export interface UseTranscriptionReturn {
   transcript: string;
   isListening: boolean;
-  isTranscribing: boolean; // true only during final cleanup transcription
+  isTranscribing: boolean;
   supported: boolean;
   durationSec: number;
   start: () => void;
@@ -17,61 +17,69 @@ export interface UseTranscriptionReturn {
 }
 
 async function whisper(blob: Blob, lang: string): Promise<string> {
-  const form = new FormData();
-  form.append('file', blob, 'chunk.webm');
-  form.append('model', 'whisper-large-v3-turbo');
-  form.append('language', lang);
-  form.append('response_format', 'text');
+  try {
+    const form = new FormData();
+    // Groq requires a filename with a supported extension
+    form.append('file', blob, 'recording.webm');
+    form.append('model', 'whisper-large-v3-turbo');
+    form.append('language', lang);
+    form.append('response_format', 'text');
 
-  const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
-    body: form,
-  });
+    const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+      body: form,
+    });
 
-  if (!res.ok) { console.error('Whisper error:', await res.text()); return ''; }
-  return (await res.text()).trim();
+    if (!res.ok) {
+      console.error('Whisper HTTP error', res.status, await res.text());
+      return '';
+    }
+    return (await res.text()).trim();
+  } catch (e) {
+    console.error('Whisper fetch failed:', e);
+    return '';
+  }
 }
 
 export function useTranscription(locale: string = 'en-AU'): UseTranscriptionReturn {
-  const [transcript, setTranscript]         = useState('');
-  const [isListening, setIsListening]       = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [durationSec, setDurationSec]       = useState(0);
+  const [transcript, setTranscript]           = useState('');
+  const [isListening, setIsListening]         = useState(false);
+  const [isTranscribing, setIsTranscribing]   = useState(false);
+  const [durationSec, setDurationSec]         = useState(0);
 
-  const recorderRef    = useRef<MediaRecorder | null>(null);
-  const streamRef      = useRef<MediaStream | null>(null);
-  const allChunksRef   = useRef<Blob[]>([]);   // every chunk — for final fallback
-  const windowRef      = useRef<Blob[]>([]);   // current 6-second window
-  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
-  const chunkTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
-  const mimeTypeRef    = useRef('audio/webm');
-  const langRef        = useRef(locale.split('-')[0]);
+  const recorderRef   = useRef<MediaRecorder | null>(null);
+  const streamRef     = useRef<MediaStream | null>(null);
+  // ALL chunks from the start — needed because the webm header is only in chunk[0]
+  const allChunksRef  = useRef<Blob[]>([]);
+  const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mimeTypeRef   = useRef('audio/webm');
+  const lang          = locale.split('-')[0]; // 'en'
 
   const supported =
     typeof window !== 'undefined' && 'MediaRecorder' in window;
 
-  const stopTimer = useCallback(() => {
+  const stopTimers = useCallback(() => {
     if (timerRef.current)      { clearInterval(timerRef.current);      timerRef.current      = null; }
-    if (chunkTimerRef.current) { clearInterval(chunkTimerRef.current); chunkTimerRef.current = null; }
+    if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
   }, []);
 
-  // Flush the current window to Whisper and append result to transcript
-  const flushWindow = useCallback(async () => {
-    const chunks = windowRef.current.splice(0); // take + clear
-    if (chunks.length === 0) return;
-    const blob = new Blob(chunks, { type: mimeTypeRef.current });
-    const text = await whisper(blob, langRef.current);
-    if (text) setTranscript(prev => prev ? prev + ' ' + text : text);
-  }, []);
+  // Sends ALL audio collected so far to Whisper and replaces the transcript.
+  // Cumulative send solves the webm header problem — chunk[0] always included.
+  const flushAll = useCallback(async () => {
+    if (allChunksRef.current.length === 0) return;
+    const blob = new Blob([...allChunksRef.current], { type: mimeTypeRef.current });
+    const text = await whisper(blob, lang);
+    if (text) setTranscript(text); // replace — Whisper re-transcribes the full audio
+  }, [lang]);
 
   const start = useCallback(async () => {
     if (!supported) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current  = stream;
+      streamRef.current   = stream;
       allChunksRef.current = [];
-      windowRef.current    = [];
 
       const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
         .find(t => MediaRecorder.isTypeSupported(t)) ?? '';
@@ -81,69 +89,60 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       recorderRef.current = recorder;
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          allChunksRef.current.push(e.data);
-          windowRef.current.push(e.data);
-        }
+        if (e.data.size > 0) allChunksRef.current.push(e.data);
       };
 
-      // Final transcription on stop — flush any remaining window chunk
       recorder.onstop = async () => {
         streamRef.current?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
-        // Flush leftover audio that didn't make it into the last interval
-        const remaining = windowRef.current.splice(0);
-        if (remaining.length > 0) {
-          setIsTranscribing(true);
-          const blob = new Blob(remaining, { type: mimeTypeRef.current });
-          const text = await whisper(blob, langRef.current);
-          if (text) setTranscript(prev => prev ? prev + ' ' + text : text);
-          setIsTranscribing(false);
-        }
+        // Final flush — full audio, highest accuracy
+        await flushAll();
+        setIsTranscribing(false);
       };
 
-      recorder.start(200); // small timeslice so we get data quickly
+      recorder.start(250); // small timeslice — chunks arrive quickly
       setIsListening(true);
+      setIsTranscribing(false);
+      setDurationSec(0); // ← reset timer for each new recording
 
-      // Duration counter
-      timerRef.current = setInterval(() => setDurationSec(s => s + 1), 1000);
-
-      // Periodic flush every CHUNK_INTERVAL_MS
-      chunkTimerRef.current = setInterval(flushWindow, CHUNK_INTERVAL_MS);
+      timerRef.current      = setInterval(() => setDurationSec(s => s + 1), 1000);
+      flushTimerRef.current = setInterval(flushAll, FLUSH_INTERVAL_MS);
 
     } catch (e) {
       console.error('Could not start recording:', e);
     }
-  }, [supported, flushWindow]);
+  }, [supported, flushAll]);
 
   const stop = useCallback(() => {
-    stopTimer();
-    recorderRef.current?.stop(); // triggers onstop → flushes remainder
-    recorderRef.current = null;
+    stopTimers();
+    // Set isTranscribing BEFORE isListening → false so the panel stays visible
+    // while the final Whisper call runs (onstop is async)
+    setIsTranscribing(true);
     setIsListening(false);
-  }, [stopTimer]);
+    recorderRef.current?.stop(); // triggers onstop async
+    recorderRef.current = null;
+  }, [stopTimers]);
 
   const reset = useCallback(() => {
-    stopTimer();
+    stopTimers();
     recorderRef.current?.stop();
     streamRef.current?.getTracks().forEach(t => t.stop());
-    recorderRef.current = null;
-    streamRef.current   = null;
+    recorderRef.current  = null;
+    streamRef.current    = null;
     allChunksRef.current = [];
-    windowRef.current    = [];
     setIsListening(false);
     setIsTranscribing(false);
     setTranscript('');
     setDurationSec(0);
-  }, [stopTimer]);
+  }, [stopTimers]);
 
   useEffect(() => {
     return () => {
       recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach(t => t.stop());
-      stopTimer();
+      stopTimers();
     };
-  }, [stopTimer]);
+  }, [stopTimers]);
 
   return { transcript, isListening, isTranscribing, supported, durationSec, start, stop, reset };
 }
