@@ -6,6 +6,7 @@ import QuickAdd from './components/QuickAdd';
 import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
 import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
+import GrammarModule from './components/GrammarModule';
 import { Plus, LogOut, Settings, BookOpenCheck } from 'lucide-react';
 // Hidden imports (This week + Practice — hidden from UI, keep for potential restoration)
 // import { Play, Zap } from 'lucide-react';
@@ -55,6 +56,7 @@ function App() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { words, loading: wordsLoading, addWord, checkDuplicate, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord, setReviewDate } = useVocabulary();
   const { locale, setLocale } = useLocale();
+  const [activeModule, setActiveModule] = useState<'vocabulary' | 'grammar'>('vocabulary');
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showLearn, setShowLearn] = useState(false);
@@ -290,11 +292,32 @@ function App() {
               )}
             </div>
           </div>
+
+          {/* Module tab bar */}
+          <div className="border-t border-zinc-800/60 mt-3 -mb-4">
+            <div className="flex gap-6">
+              {(['vocabulary', 'grammar'] as const).map(mod => (
+                <button
+                  key={mod}
+                  onClick={() => setActiveModule(mod)}
+                  className={`py-3 text-sm capitalize border-b-2 transition-colors ${
+                    activeModule === mod
+                      ? 'border-violet-500 text-zinc-100'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {mod}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-12">
-        {wordsLoading ? (
+        {activeModule === 'grammar' ? (
+          <GrammarModule userId={user?.id ?? null} locale={locale} />
+        ) : wordsLoading ? (
           <div className="text-center text-zinc-500">Loading...</div>
         ) : words.length === 0 ? (
           <div className="text-center py-16">
