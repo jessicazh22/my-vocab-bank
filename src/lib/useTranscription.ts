@@ -84,8 +84,9 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
 
   // ── Deepgram WebSocket ────────────────────────────────────────────────────
   const dgSocketRef   = useRef<WebSocket | null>(null);
-  const committedRef  = useRef('');   // confirmed (is_final) Deepgram words
-  const usingDGRef    = useRef(false); // true once DG WS successfully opens
+  const committedRef  = useRef('');          // confirmed (is_final) Deepgram words
+  const usingDGRef    = useRef(false);       // true once DG WS successfully opens
+  const dgQueueRef    = useRef<ArrayBuffer[]>([]); // audio buffered before WS open
 
   // ── Whisper fallback (for if DG fails) ────────────────────────────────────
   const prevTextRef   = useRef('');
@@ -138,8 +139,14 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
-      usingDGRef.current = true;
+      usingDGRef.current  = true;
       dgSocketRef.current = ws;
+      // Drain any audio that arrived before the WS handshake finished
+      // (includes the WebM container header — critical for Deepgram to decode)
+      for (const buf of dgQueueRef.current) {
+        try { ws.send(buf); } catch { /* ignore */ }
+      }
+      dgQueueRef.current = [];
       // Stop Whisper flush timer — Deepgram is live
       if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
     };
@@ -199,6 +206,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       headerChunk.current  = null;
       prevTextRef.current  = '';
       committedRef.current = '';
+      dgQueueRef.current   = [];
       usingDGRef.current   = false;
       isActiveRef.current  = true;
 
@@ -223,14 +231,16 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
           windowRef.current.push(e.data);
         }
 
-        // Stream to Deepgram
-        if (usingDGRef.current && dgSocketRef.current?.readyState === WebSocket.OPEN) {
-          e.data.arrayBuffer().then(buf => {
-            if (dgSocketRef.current?.readyState === WebSocket.OPEN) {
-              dgSocketRef.current.send(buf);
-            }
-          });
-        }
+        // Stream to Deepgram (or buffer if WS not yet open)
+        e.data.arrayBuffer().then(buf => {
+          if (dgSocketRef.current?.readyState === WebSocket.OPEN) {
+            dgSocketRef.current.send(buf);
+          } else if (!usingDGRef.current) {
+            // WS is still connecting — queue the chunk so the container header
+            // and early audio aren't lost (drained in ws.onopen)
+            dgQueueRef.current.push(buf);
+          }
+        });
       };
 
       recorder.onstop = async () => {
@@ -307,6 +317,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     headerChunk.current  = null;
     prevTextRef.current  = '';
     committedRef.current = '';
+    dgQueueRef.current   = [];
     usingDGRef.current   = false;
     stopTimers();
     setTranscript('');

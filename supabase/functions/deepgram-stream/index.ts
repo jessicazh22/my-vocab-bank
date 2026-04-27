@@ -24,25 +24,22 @@ Deno.serve(async (req: Request) => {
   }
 
   const url = new URL(req.url);
-  const lang     = url.searchParams.get("lang")     ?? "en";
-  const model    = url.searchParams.get("model")    ?? "nova-2-general";
-  const encoding = url.searchParams.get("encoding") ?? "linear16";
-  const sampleRate = url.searchParams.get("sample_rate") ?? "16000";
+  const lang  = url.searchParams.get("lang")  ?? "en";
+  const model = url.searchParams.get("model") ?? "nova-2-general";
 
   // Upgrade client connection
   const { socket: clientSocket, response } = Deno.upgradeWebSocket(req);
 
   // Open Deepgram WebSocket — auth via subprotocol token array
+  // NOTE: do NOT set encoding/sample_rate for container formats (WebM/Opus).
+  // Deepgram detects codec and sample rate from the WebM container headers automatically.
   const dgUrl = new URL("wss://api.deepgram.com/v1/listen");
-  dgUrl.searchParams.set("model",        model);
-  dgUrl.searchParams.set("language",     lang);
-  dgUrl.searchParams.set("encoding",     encoding);
-  dgUrl.searchParams.set("sample_rate",  sampleRate);
-  dgUrl.searchParams.set("channels",     "1");
+  dgUrl.searchParams.set("model",           model);
+  dgUrl.searchParams.set("language",        lang);
   dgUrl.searchParams.set("interim_results", "true");
-  dgUrl.searchParams.set("smart_format", "true");
-  dgUrl.searchParams.set("punctuate",    "true");
-  dgUrl.searchParams.set("endpointing",  "300");
+  dgUrl.searchParams.set("smart_format",    "true");
+  dgUrl.searchParams.set("punctuate",       "true");
+  dgUrl.searchParams.set("endpointing",     "300");
 
   const dgSocket = new WebSocket(dgUrl.toString(), ["token", DEEPGRAM_API_KEY]);
   dgSocket.binaryType = "arraybuffer";
