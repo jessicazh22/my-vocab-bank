@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Mic, CheckCircle2 } from 'lucide-react';
 import { useTranscription } from '../lib/useTranscription';
 import TranscriptPanel from './TranscriptPanel';
@@ -26,8 +27,15 @@ export default function GrammarModule({ userId, locale }: Props) {
     reset,
   } = useTranscription(locale);
 
-  const wordCount = transcript.trim()
-    ? transcript.trim().split(/\s+/).filter(Boolean).length
+  const [editedTranscript, setEditedTranscript] = useState('');
+
+  // Sync editable copy whenever a new transcript arrives
+  useEffect(() => {
+    setEditedTranscript(transcript);
+  }, [transcript]);
+
+  const editedWordCount = editedTranscript.trim()
+    ? editedTranscript.trim().split(/\s+/).filter(Boolean).length
     : 0;
 
   // ── Recording or transcribing ────────────────────────────────────────────────
@@ -43,13 +51,15 @@ export default function GrammarModule({ userId, locale }: Props) {
     );
   }
 
-  // ── Post-recording: transcript captured, not yet analysed ───────────────────
+  // ── Post-recording: editable transcript ────────────────────────────────────
   if (transcript) {
     return (
-      <div className="max-w-2xl mx-auto flex flex-col gap-6">
+      <div className="max-w-2xl mx-auto flex flex-col gap-5">
+
+        {/* Header row */}
         <div className="flex items-center justify-between">
-          <p className="text-sm text-zinc-400">
-            <span className="text-zinc-200 font-medium">{wordCount} words</span> recorded
+          <p className="text-sm text-zinc-500">
+            <span className="text-zinc-300 font-medium">{editedWordCount}</span> words
           </p>
           <button
             onClick={reset}
@@ -59,15 +69,25 @@ export default function GrammarModule({ userId, locale }: Props) {
           </button>
         </div>
 
-        {/* Transcript review */}
-        <div className="bg-zinc-800/40 border border-zinc-700/60 rounded-xl px-5 py-4 text-sm text-zinc-300 leading-relaxed">
-          {transcript}
-        </div>
+        {/* Editable transcript */}
+        <textarea
+          value={editedTranscript}
+          onChange={e => setEditedTranscript(e.target.value)}
+          rows={10}
+          className="w-full bg-zinc-800/40 border border-zinc-700/60 rounded-xl px-5 py-4
+            text-sm text-zinc-200 leading-relaxed resize-none
+            focus:outline-none focus:border-zinc-500
+            placeholder:text-zinc-600 transition-colors"
+          placeholder="Your transcript will appear here…"
+        />
+        <p className="text-xs text-zinc-600 -mt-2">
+          Fix any transcription errors before analysing.
+        </p>
 
         {/* Analyse CTA — will be wired in Milestone 4 */}
-        <div className="flex justify-center">
+        <div className="flex justify-center pt-1">
           <button
-            disabled
+            disabled={!editedTranscript.trim()}
             className="flex items-center gap-2.5 px-8 py-3 rounded-xl text-sm font-medium
               bg-amber-900/20 text-amber-500/50 border border-amber-800/30
               cursor-not-allowed select-none"
@@ -77,6 +97,7 @@ export default function GrammarModule({ userId, locale }: Props) {
             <span className="ml-1 text-[10px] text-amber-600/60 uppercase tracking-wider">Coming soon</span>
           </button>
         </div>
+
       </div>
     );
   }
