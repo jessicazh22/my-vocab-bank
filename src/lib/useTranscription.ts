@@ -256,11 +256,18 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
           dgSocketRef.current = null;
         }
 
-        // Final Whisper call — use as authoritative result (better accuracy than streaming)
+        // Final Whisper call over the complete audio — authoritative result.
+        // IMPORTANT: do NOT pass committedSoFar as the prompt here.
+        // Whisper's prompt parameter means "this is what was already said" and it
+        // resumes transcription from where the prompt ends, silently dropping everything
+        // before it. For the full-audio final call we pass '' so Whisper transcribes
+        // the entire recording from the start.
         const blob = new Blob([...allChunksRef.current], { type: mimeTypeRef.current });
-        const committedSoFar = committedRef.current;
-        const text = await transcribeViaEdge(blob, mimeTypeRef.current, lang, committedSoFar);
-        if (text) setTranscript(text);
+        const text = await transcribeViaEdge(blob, mimeTypeRef.current, lang, '');
+        // Use Whisper result if we got one; otherwise fall back to whatever
+        // Deepgram accumulated (committed) so the user never sees an empty box.
+        const finalText = text || committedRef.current;
+        if (finalText) setTranscript(finalText);
         setIsTranscribing(false);
       };
 
