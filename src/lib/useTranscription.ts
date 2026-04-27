@@ -3,15 +3,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-// Groq Whisper fallback — used when Deepgram WS fails
+// Whisper fallback — fires every 6 s when Deepgram is unavailable
 const FLUSH_INTERVAL_MS = 6000;
-
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
-}
 
 export interface UseTranscriptionReturn {
   transcript: string;
@@ -57,44 +50,34 @@ async function transcribeViaEdge(
   }
 }
 
-// ── Deepgram transcript message shape ─────────────────────────────────────────
-interface DeepgramResult {
-  type: string;
-  channel?: {
-    alternatives?: Array<{ transcript: string }>;
-  };
-  is_final?: boolean;
-  speech_final?: boolean;
-}
-
 export function useTranscription(locale: string = 'en-AU'): UseTranscriptionReturn {
-  const [transcript, setTranscript]             = useState('');
+  const [transcript, setTranscript]               = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
-  const [isListening, setIsListening]           = useState(false);
-  const [isTranscribing, setIsTranscribing]     = useState(false);
-  const [durationSec, setDurationSec]           = useState(0);
+  const [isListening, setIsListening]             = useState(false);
+  const [isTranscribing, setIsTranscribing]       = useState(false);
+  const [durationSec, setDurationSec]             = useState(0);
 
   // ── MediaRecorder ──────────────────────────────────────────────────────────
-  const recorderRef   = useRef<MediaRecorder | null>(null);
-  const streamRef     = useRef<MediaStream | null>(null);
-  const allChunksRef  = useRef<Blob[]>([]);
-  const headerChunk   = useRef<Blob | null>(null);
-  const windowRef     = useRef<Blob[]>([]);
-  const mimeTypeRef   = useRef('audio/webm');
+  const recorderRef  = useRef<MediaRecorder | null>(null);
+  const streamRef    = useRef<MediaStream | null>(null);
+  const allChunksRef = useRef<Blob[]>([]);
+  const headerChunk  = useRef<Blob | null>(null);
+  const windowRef    = useRef<Blob[]>([]);
+  const mimeTypeRef  = useRef('audio/webm');
 
   // ── Deepgram WebSocket ────────────────────────────────────────────────────
-  const dgSocketRef   = useRef<WebSocket | null>(null);
-  const committedRef  = useRef('');          // confirmed (is_final) Deepgram words
-  const usingDGRef    = useRef(false);       // true once DG WS successfully opens
-  const dgQueueRef    = useRef<ArrayBuffer[]>([]); // audio buffered before WS open
+  const dgSocketRef  = useRef<WebSocket | null>(null);
+  const committedRef = useRef('');              // is_final words accumulated
+  const interimRef   = useRef('');              // current non-final words (for UtteranceEnd)
+  const usingDGRef   = useRef(false);           // true once DG WS opens successfully
+  const dgQueueRef   = useRef<ArrayBuffer[]>([]); // audio buffered before WS open
 
-  // ── Whisper fallback (for if DG fails) ────────────────────────────────────
-  const prevTextRef   = useRef('');
+  // ── Whisper fallback ──────────────────────────────────────────────────────
+  const prevTextRef  = useRef('');
 
-  // ── Timers ─────────────────────────────────────────────────────────────────
+  // ── Timers / flags ─────────────────────────────────────────────────────────
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const isActiveRef   = useRef(false);
 
   const lang = locale.split('-')[0];
@@ -108,7 +91,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
 
   // ── Whisper incremental flush (fallback when Deepgram unavailable) ─────────
   const flushWindow = useCallback(async () => {
-    if (usingDGRef.current) return; // Deepgram is handling it
+    if (usingDGRef.current) return;
     if (!headerChunk.current || windowRef.current.length === 0) return;
 
     const chunks = windowRef.current.splice(0);
@@ -122,68 +105,103 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     }
   }, [lang]);
 
-  // ── Connect Deepgram WebSocket ─────────────────────────────────────────────
-  const connectDeepgram = useCallback(() => {
-    // Build wss:// URL for the edge function
-    const wsBase = SUPABASE_URL.replace(/^https?:\/\//, '');
-    const wsUrl  = `wss://${wsBase}/functions/v1/deepgram-stream?lang=${lang}&apikey=${SUPABASE_ANON_KEY}`;
-
-    let ws: WebSocket;
+  // ── Connect directly to Deepgram (no proxy) ───────────────────────────────
+  // Fetch a short-lived key from the edge function, then open a WS straight to
+  // api.deepgram.com. This is more reliable than a Supabase WS proxy because
+  // Supabase's gateway doesn't always forward WebSocket upgrade requests.
+  const connectDeepgram = useCallback(async () => {
     try {
-      ws = new WebSocket(wsUrl);
-    } catch (e) {
-      console.warn('Deepgram WS connect failed:', e);
-      return;
-    }
+      // Retrieve the Deepgram API key server-side so it's never in the bundle
+      const keyRes = await fetch(`${SUPABASE_URL}/functions/v1/get-deepgram-key`, {
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      });
+      if (!keyRes.ok) throw new Error(`Key fetch failed: ${keyRes.status}`);
+      const { key } = await keyRes.json() as { key: string };
 
-    ws.binaryType = 'arraybuffer';
+      // Build Deepgram streaming URL
+      const dgUrl = new URL('wss://api.deepgram.com/v1/listen');
+      dgUrl.searchParams.set('model',            'nova-2-general');
+      dgUrl.searchParams.set('language',         lang);
+      dgUrl.searchParams.set('interim_results',  'true');
+      dgUrl.searchParams.set('utterance_end_ms', '1000'); // commit pending words after 1 s silence
+      dgUrl.searchParams.set('smart_format',     'true');
+      dgUrl.searchParams.set('punctuate',        'true');
+      dgUrl.searchParams.set('endpointing',      '300');
 
-    ws.onopen = () => {
-      usingDGRef.current  = true;
-      dgSocketRef.current = ws;
-      // Drain any audio that arrived before the WS handshake finished
-      // (includes the WebM container header — critical for Deepgram to decode)
-      for (const buf of dgQueueRef.current) {
-        try { ws.send(buf); } catch { /* ignore */ }
-      }
-      dgQueueRef.current = [];
-      // Stop Whisper flush timer — Deepgram is live
-      if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
-    };
+      // Auth via WebSocket subprotocol — the Deepgram-supported way
+      const ws = new WebSocket(dgUrl.toString(), ['token', key]);
+      ws.binaryType = 'arraybuffer';
 
-    ws.onmessage = (event) => {
-      if (!isActiveRef.current) return;
-      try {
-        const data = JSON.parse(event.data as string) as DeepgramResult;
-        if (data.type !== 'Results') return;
-
-        const alt     = data.channel?.alternatives?.[0];
-        const text    = alt?.transcript ?? '';
-        const isFinal = data.is_final ?? false;
-
-        if (isFinal && text) {
-          committedRef.current = committedRef.current
-            ? `${committedRef.current} ${text.trim()}`
-            : text.trim();
-          setTranscript(committedRef.current);
-          setInterimTranscript('');
-        } else if (!isFinal && text) {
-          setInterimTranscript(text.trim());
+      ws.onopen = () => {
+        usingDGRef.current  = true;
+        dgSocketRef.current = ws;
+        // Drain audio that arrived during the key-fetch + WS handshake
+        // (includes the critical WebM container header)
+        for (const buf of dgQueueRef.current) {
+          try { ws.send(buf); } catch { /* ignore */ }
         }
-      } catch { /* non-JSON heartbeat */ }
-    };
+        dgQueueRef.current = [];
+        // Deepgram is live — kill the Whisper fallback timer
+        if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
+      };
 
-    ws.onerror = () => {
-      console.warn('Deepgram WS error — falling back to Whisper');
-      usingDGRef.current  = false;
-      dgSocketRef.current = null;
-    };
+      ws.onmessage = (event) => {
+        if (!isActiveRef.current) return;
+        try {
+          const data = JSON.parse(event.data as string) as {
+            type: string;
+            is_final?: boolean;
+            channel?: { alternatives?: Array<{ transcript: string }> };
+          };
 
-    ws.onclose = () => {
-      if (dgSocketRef.current === ws) {
+          if (data.type === 'Results') {
+            const text    = data.channel?.alternatives?.[0]?.transcript ?? '';
+            const isFinal = data.is_final ?? false;
+
+            if (isFinal && text) {
+              // Confirmed words — append to committed transcript
+              committedRef.current = committedRef.current
+                ? `${committedRef.current} ${text.trim()}`
+                : text.trim();
+              interimRef.current = '';
+              setTranscript(committedRef.current);
+              setInterimTranscript('');
+            } else if (!isFinal && text) {
+              // Live preview — show as italic interim text
+              interimRef.current = text.trim();
+              setInterimTranscript(text.trim());
+            }
+          }
+
+          if (data.type === 'UtteranceEnd') {
+            // After 1 s of silence Deepgram fires UtteranceEnd. Any words still in
+            // interimRef haven't been finalised — commit them now so nothing is lost.
+            if (interimRef.current) {
+              committedRef.current = committedRef.current
+                ? `${committedRef.current} ${interimRef.current}`
+                : interimRef.current;
+              interimRef.current = '';
+              setTranscript(committedRef.current);
+              setInterimTranscript('');
+            }
+          }
+        } catch { /* non-JSON heartbeat — ignore */ }
+      };
+
+      ws.onerror = () => {
+        console.warn('Deepgram WS error — Whisper fallback active');
+        usingDGRef.current  = false;
         dgSocketRef.current = null;
-      }
-    };
+      };
+
+      ws.onclose = () => {
+        if (dgSocketRef.current === ws) dgSocketRef.current = null;
+      };
+
+    } catch (e) {
+      console.warn('Deepgram connect failed — Whisper fallback active:', e);
+      // usingDGRef stays false → Whisper flush timer runs normally
+    }
   }, [lang]);
 
   // ── start ─────────────────────────────────────────────────────────────────
@@ -206,6 +224,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       headerChunk.current  = null;
       prevTextRef.current  = '';
       committedRef.current = '';
+      interimRef.current   = '';
       dgQueueRef.current   = [];
       usingDGRef.current   = false;
       isActiveRef.current  = true;
@@ -231,13 +250,13 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
           windowRef.current.push(e.data);
         }
 
-        // Stream to Deepgram (or buffer if WS not yet open)
+        // Stream to Deepgram, or buffer if WS not yet open
         e.data.arrayBuffer().then(buf => {
           if (dgSocketRef.current?.readyState === WebSocket.OPEN) {
             dgSocketRef.current.send(buf);
           } else if (!usingDGRef.current) {
-            // WS is still connecting — queue the chunk so the container header
-            // and early audio aren't lost (drained in ws.onopen)
+            // Still connecting (or key fetch in progress) — queue so the WebM
+            // container header and early audio aren't dropped
             dgQueueRef.current.push(buf);
           }
         });
@@ -247,7 +266,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
         streamRef.current?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
 
-        // Close Deepgram WS cleanly
+        // Close Deepgram cleanly
         if (dgSocketRef.current) {
           try {
             dgSocketRef.current.send(JSON.stringify({ type: 'CloseStream' }));
@@ -256,22 +275,18 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
           dgSocketRef.current = null;
         }
 
-        // Final Whisper call over the complete audio — authoritative result.
-        // IMPORTANT: do NOT pass committedSoFar as the prompt here.
-        // Whisper's prompt parameter means "this is what was already said" and it
-        // resumes transcription from where the prompt ends, silently dropping everything
-        // before it. For the full-audio final call we pass '' so Whisper transcribes
-        // the entire recording from the start.
+        // Final Whisper call — full audio, no prompt bias, authoritative result.
+        // Do NOT pass committed Deepgram text as prompt: Whisper treats the prompt
+        // as "already transcribed" and skips the beginning of the audio.
         const blob = new Blob([...allChunksRef.current], { type: mimeTypeRef.current });
         const text = await transcribeViaEdge(blob, mimeTypeRef.current, lang, '');
-        // Use Whisper result if we got one; otherwise fall back to whatever
-        // Deepgram accumulated (committed) so the user never sees an empty box.
+        // Use Whisper if successful; else keep the Deepgram accumulated result
         const finalText = text || committedRef.current;
         if (finalText) setTranscript(finalText);
         setIsTranscribing(false);
       };
 
-      recorder.start(250); // 250ms chunks for low-latency streaming
+      recorder.start(250);
 
       setTranscript('');
       setInterimTranscript('');
@@ -281,10 +296,11 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
 
       timerRef.current = setInterval(() => setDurationSec(s => s + 1), 1000);
 
-      // Start Deepgram — if it opens successfully, Whisper flush is suppressed
+      // Connect to Deepgram directly. While the key-fetch + handshake is in
+      // progress (typically <300 ms) audio is buffered in dgQueueRef.
       connectDeepgram();
 
-      // Whisper flush timer as fallback (no-op if Deepgram connects)
+      // Whisper flush timer — suppressed automatically once Deepgram opens
       flushTimerRef.current = setInterval(flushWindow, FLUSH_INTERVAL_MS);
 
     } catch (e) {
@@ -324,6 +340,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     headerChunk.current  = null;
     prevTextRef.current  = '';
     committedRef.current = '';
+    interimRef.current   = '';
     dgQueueRef.current   = [];
     usingDGRef.current   = false;
     stopTimers();
