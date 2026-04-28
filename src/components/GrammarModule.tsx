@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Mic, Clock, X } from 'lucide-react';
+import { Mic, Clock, X, Sparkles } from 'lucide-react';
 import { useTranscription } from '../lib/useTranscription';
 import { usePracticeSession } from '../lib/usePracticeSession';
 import TranscriptPanel from './TranscriptPanel';
 import SessionDetail from './SessionDetail';
+import GrammarAnalysis from './GrammarAnalysis';
 import { RecordingFeed, relativeTime, formatDuration } from './RecordingFeed';
+import { GLORIA_SESSIONS } from '../data/gloriaData';
+import type { AnalyzedSession } from '../data/gloriaData';
 import type { GrammarSession, PracticeSession } from '../lib/grammar';
 
 interface Props {
@@ -12,6 +15,42 @@ interface Props {
   locale: 'en-AU' | 'en-US';
   view: 'coach' | 'sessions';
   onSessionEnded: () => void;
+}
+
+// ── Analysed session card (Gloria's pre-annotated sessions) ───────────────────
+function AnalysedSessionCard({
+  session,
+  onSelect,
+}: {
+  session: AnalyzedSession;
+  onSelect: () => void;
+}) {
+  return (
+    <div
+      onClick={onSelect}
+      className="group flex flex-col gap-2.5 px-4 py-4 rounded-xl
+        bg-zinc-900/60 border border-zinc-800/60 hover:border-zinc-700/60
+        transition-colors cursor-pointer"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium
+            text-sky-400/80 bg-sky-950/50 border border-sky-900/40 rounded-md px-2 py-0.5">
+            <Sparkles size={9} />
+            Analysed
+          </span>
+          <span className="text-xs text-zinc-500">{session.speaker}</span>
+        </div>
+        <span className="text-[11px] text-zinc-700">
+          {session.errors.length} correction{session.errors.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+      <p className="text-sm font-medium text-zinc-300">{session.topic}</p>
+      <p className="text-xs text-zinc-600 leading-relaxed line-clamp-2">
+        {session.transcript.slice(0, 140).trimEnd()}…
+      </p>
+    </div>
+  );
 }
 
 // ── Sessions list (view = 'sessions') ─────────────────────────────────────────
@@ -71,40 +110,75 @@ function CompletedSessionRow({
 }
 
 function CompletedSessionsList({
-  userId, sessions, loading, onDelete, onSelect,
+  userId, sessions, loading, onDelete, onSelect, onSelectAnalysis,
 }: {
   userId: string | null;
   sessions: PracticeSession[];
   loading: boolean;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
+  onSelectAnalysis: (id: string) => void;
 }) {
+  const hasRecorded = sessions.length > 0;
+
   if (!userId) {
     return (
-      <div className="flex flex-col items-center gap-4 py-20 text-center">
-        <p className="text-zinc-500 text-sm">Log in to save and view your sessions.</p>
+      <div className="max-w-2xl mx-auto w-full flex flex-col gap-8">
+        {/* Always show Gloria's analysed sessions even when logged out */}
+        <div className="flex flex-col gap-2.5">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
+            Analysed sessions
+          </p>
+          {GLORIA_SESSIONS.map(s => (
+            <AnalysedSessionCard key={s.id} session={s} onSelect={() => onSelectAnalysis(s.id)} />
+          ))}
+        </div>
+        <div className="flex flex-col items-center gap-4 py-8 text-center">
+          <p className="text-zinc-500 text-sm">Log in to save and view your sessions.</p>
+        </div>
       </div>
     );
   }
+
   if (loading) return <p className="text-xs text-zinc-600 py-8 text-center">Loading…</p>;
-  if (sessions.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-20 text-center">
-        <p className="text-zinc-500 text-sm">No sessions yet.</p>
-        <p className="text-xs text-zinc-600">Head to Grammar Coach to start recording.</p>
-      </div>
-    );
-  }
+
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-2">
-      {sessions.map(s => (
-        <CompletedSessionRow
-          key={s.id}
-          session={s}
-          onDelete={() => onDelete(s.id)}
-          onSelect={() => onSelect(s.id)}
-        />
-      ))}
+    <div className="max-w-2xl mx-auto w-full flex flex-col gap-8">
+      {/* Analysed sessions — always visible */}
+      <div className="flex flex-col gap-2.5">
+        <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
+          Analysed sessions
+        </p>
+        {GLORIA_SESSIONS.map(s => (
+          <AnalysedSessionCard key={s.id} session={s} onSelect={() => onSelectAnalysis(s.id)} />
+        ))}
+      </div>
+
+      {/* Recorded sessions */}
+      {hasRecorded && (
+        <div className="flex flex-col gap-2.5">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
+            Recorded sessions
+          </p>
+          <div className="flex flex-col gap-2">
+            {sessions.map(s => (
+              <CompletedSessionRow
+                key={s.id}
+                session={s}
+                onDelete={() => onDelete(s.id)}
+                onSelect={() => onSelect(s.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hasRecorded && (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <p className="text-zinc-500 text-sm">No recorded sessions yet.</p>
+          <p className="text-xs text-zinc-600">Head to Grammar Coach to start recording.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -123,8 +197,9 @@ export default function GrammarModule({ userId, locale, view }: Props) {
     saveSnippet, deleteSession, updateRecording,
   } = usePracticeSession(userId);
 
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const [autoSaving,        setAutoSaving]         = useState(false);
+  const [selectedSessionId,  setSelectedSessionId]  = useState<string | null>(null);
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
+  const [autoSaving,         setAutoSaving]          = useState(false);
 
   // Flat feed: all recordings newest-first
   const allRecordings = useMemo(() =>
@@ -143,7 +218,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript, isListening, isTranscribing]);
 
-  // Keyboard shortcut: Space (when not focused on a text input)
+  // Keyboard shortcut: Space
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.code !== 'Space') return;
@@ -159,6 +234,20 @@ export default function GrammarModule({ userId, locale, view }: Props) {
 
   // ── Sessions view ──────────────────────────────────────────────────────────
   if (view === 'sessions') {
+    // Gloria's analysed sessions
+    if (selectedAnalysisId) {
+      const analysis = GLORIA_SESSIONS.find(s => s.id === selectedAnalysisId);
+      if (analysis) {
+        return (
+          <GrammarAnalysis
+            session={analysis}
+            onBack={() => setSelectedAnalysisId(null)}
+          />
+        );
+      }
+    }
+
+    // Regular recorded sessions
     const selectedSession = selectedSessionId
       ? sessions.find(s => s.id === selectedSessionId) ?? null
       : null;
@@ -173,6 +262,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
         />
       );
     }
+
     return (
       <CompletedSessionsList
         userId={userId}
@@ -180,6 +270,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
         loading={loading}
         onDelete={id => { deleteSession(id); if (selectedSessionId === id) setSelectedSessionId(null); }}
         onSelect={setSelectedSessionId}
+        onSelectAnalysis={setSelectedAnalysisId}
       />
     );
   }
