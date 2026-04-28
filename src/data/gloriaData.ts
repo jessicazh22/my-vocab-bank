@@ -206,6 +206,30 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
       },
       {
         id: 'G9',
+        original: 'develop this, um, good habit',
+        corrected: 'develop better financial habits',
+        category: 'vague_reference',
+        explanation: "'This good habit' is vague — what habit exactly? More specific: 'develop better financial habits' or 'get better with money'.",
+        context: "that's a reason I want to [develop this, um, good habit]",
+      },
+      {
+        id: 'G10',
+        original: 'This is not about rich and poor',
+        corrected: 'This is not about being rich or poor',
+        category: 'parallel_structure',
+        explanation: "For clarity and proper parallel structure, use 'being rich or poor' (gerund form). Don't use bare adjectives 'rich and poor'.",
+        context: '[This is not about rich and poor], it\'s about',
+        grammar_pattern: {
+          name: 'parallel structure',
+          structure: 'about being X or Y (gerund form)',
+          examples: [
+            'about being rich or poor',
+            'between being young or being old',
+          ],
+        },
+      },
+      {
+        id: 'G11',
         original: 'how you gonna use it',
         corrected: "how you're gonna use it",
         category: 'verb_missing',
@@ -213,7 +237,7 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         context: '[how you gonna use it] as a tool',
       },
       {
-        id: 'G10',
+        id: 'G12',
         original: 'rather than let the money control you',
         corrected: 'rather than letting money control you',
         category: 'verb_pattern',
@@ -340,6 +364,14 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
       },
       {
         id: 'G10',
+        original: 'when she wanna study hard',
+        corrected: 'when she decided she wanted to study hard',
+        category: 'verb_choice',
+        explanation: "'Wanna' (want to) is too casual here, and past tense is needed. Better: 'when she decided she wanted to study hard' (shows the decision moment).",
+        context: 'the plot [when she wanna study hard] because she\'s a hot girl',
+      },
+      {
+        id: 'G11',
         original: 'when she decide she want to study hard',
         corrected: 'when she decided she wanted to study hard',
         category: 'tense_consistency',
@@ -347,7 +379,7 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         context: 'but [when she decide she want to study hard], um, her friend',
       },
       {
-        id: 'G11',
+        id: 'G12',
         original: 'student kind of think study hard is awkward or embarrassed',
         corrected: 'students kind of think studying hard is awkward or embarrassing',
         category: 'singular_plural',
@@ -364,7 +396,7 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         },
       },
       {
-        id: 'G12',
+        id: 'G13',
         original: 'you might got laughed at',
         corrected: 'you might get laughed at',
         category: 'modal_verb_pattern',
@@ -381,12 +413,20 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         },
       },
       {
-        id: 'G13',
+        id: 'G14',
         original: 'in that movie, I realise',
         corrected: 'in that movie, I realised',
         category: 'tense_consistency',
         explanation: "You're talking about when you watched the movie (past), so use past tense 'realised', not 'realise'.",
         context: 'So [in that movie, I realise] real friends will support',
+      },
+      {
+        id: 'G15',
+        original: 'mock someone who wanna improve',
+        corrected: 'mock people who want to improve',
+        category: 'word_choice',
+        explanation: "Use 'people' or 'others' instead of 'someone' for general statements. Also use 'want' instead of casual 'wanna' in this context.",
+        context: 'people should not, um, [mock someone who wanna improve] and change',
       },
     ],
     positive: [
