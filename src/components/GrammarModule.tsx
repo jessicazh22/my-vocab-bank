@@ -272,14 +272,15 @@ export default function GrammarModule({ userId, locale, view }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript, isListening, isTranscribing]);
 
-  // Keyboard shortcut: ⌘⇧M / Ctrl+Shift+M
+  // Keyboard shortcut: Space (when not focused on a text input)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
-        e.preventDefault();
-        if      (isListening)                        stop();
-        else if (!isTranscribing && !autoSaving)     start();
-      }
+      if (e.code !== 'Space') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+      e.preventDefault();
+      if      (isListening)                    stop();
+      else if (!isTranscribing && !autoSaving) start();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -332,10 +333,10 @@ export default function GrammarModule({ userId, locale, view }: Props) {
       <div className="max-w-2xl mx-auto w-full flex items-center justify-between">
         <p className="text-[11px] text-zinc-600">
           Press{' '}
-          <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[11px] text-zinc-500">
-            ⌘⇧M
+          <kbd className="px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[11px] text-zinc-500">
+            Space
           </kbd>{' '}
-          to record · stop to save
+          to record · again to stop
         </p>
 
         {supported && (
