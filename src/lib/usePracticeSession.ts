@@ -13,6 +13,7 @@ interface UsePracticeSessionReturn {
   discardSession:  () => void;
   deleteSession:   (sessionId: string) => Promise<void>;
   updateRecording: (recordingId: string, transcript: string) => Promise<void>;
+  saveSnippet:     (transcript: string, durationSec: number, speaker?: string | null) => Promise<GrammarSession>;
 }
 
 type RawSession = {
@@ -232,5 +233,77 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
     if (error) console.warn('Could not update recording:', error.message);
   }, []);
 
-  return { sessions, activeSession, loading, startSession, addRecording, removeRecording, endSession, discardSession, deleteSession, updateRecording };
+  // ── saveSnippet ───────────────────────────────────────────────────────────
+  // All-in-one: creates a practice_session, inserts the recording, marks the
+  // session complete — so the caller only needs one call and the UI doesn't
+  // need to manage session lifecycle at all.
+  const saveSnippet = useCallback(async (
+    transcript: string,
+    durationSec: number,
+    speaker: string | null = null,
+  ): Promise<GrammarSession> => {
+    const wordCount   = transcript.trim() ? transcript.trim().split(/\s+/).filter(Boolean).length : 0;
+    const completedAt = new Date().toISOString();
+
+    // Optimistic local record so the feed updates immediately
+    const localId  = crypto.randomUUID();
+    const localRec: GrammarSession = {
+      id:                  localId,
+      transcript,
+      duration_sec:        durationSec,
+      word_count:          wordCount,
+      analyzed_at:         null,
+      created_at:          new Date().toISOString(),
+      practice_session_id: null,
+      sort_order:          0,
+      speaker,
+    };
+    const localSession: PracticeSession = {
+      id:           crypto.randomUUID(),
+      created_at:   localRec.created_at,
+      completed_at: completedAt,
+      recordings:   [localRec],
+    };
+    setSessions(prev => [localSession, ...prev]);
+
+    if (!userId) return localRec;
+
+    // 1. Create session
+    const { data: sd, error: se } = await supabase
+      .from('practice_sessions')
+      .insert({ user_id: userId })
+      .select('id, created_at')
+      .single();
+    if (se) { console.warn('saveSnippet: session insert failed:', se.message); return localRec; }
+
+    // 2. Create recording
+    const { data: rd, error: re } = await supabase
+      .from('grammar_sessions')
+      .insert({
+        user_id:             userId,
+        transcript,
+        duration_sec:        durationSec,
+        word_count:          wordCount,
+        practice_session_id: sd.id,
+        sort_order:          0,
+        speaker,
+      })
+      .select('id, transcript, duration_sec, word_count, analyzed_at, created_at, practice_session_id, sort_order, speaker')
+      .single();
+    if (re) { console.warn('saveSnippet: recording insert failed:', re.message); return localRec; }
+
+    // 3. Mark session complete
+    await supabase.from('practice_sessions').update({ completed_at: completedAt }).eq('id', sd.id);
+
+    // Replace local placeholders with real DB rows
+    const saved = rd as GrammarSession;
+    setSessions(prev => prev.map(s =>
+      s.id === localSession.id
+        ? { id: sd.id, created_at: sd.created_at, completed_at: completedAt, recordings: [saved] }
+        : s
+    ));
+    return saved;
+  }, [userId]);
+
+  return { sessions, activeSession, loading, startSession, addRecording, removeRecording, endSession, discardSession, deleteSession, updateRecording, saveSnippet };
 }
