@@ -13,6 +13,7 @@ interface UsePracticeSessionReturn {
   discardSession:  () => void;
   deleteSession:   (sessionId: string) => Promise<void>;
   updateRecording: (recordingId: string, transcript: string) => Promise<void>;
+  renameSession:   (sessionId: string, name: string) => Promise<void>;
   saveSnippet:     (transcript: string, durationSec: number, speaker?: string | null) => Promise<GrammarSession>;
 }
 
@@ -20,6 +21,7 @@ type RawSession = {
   id: string;
   created_at: string;
   completed_at: string | null;
+  name: string | null;
   grammar_sessions: Array<{
     id: string;
     transcript: string;
@@ -37,7 +39,17 @@ function toSession(raw: RawSession): PracticeSession {
   const recordings = (raw.grammar_sessions ?? [])
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order) as GrammarSession[];
-  return { id: raw.id, created_at: raw.created_at, completed_at: raw.completed_at, recordings };
+  return {
+    id:           raw.id,
+    created_at:   raw.created_at,
+    completed_at: raw.completed_at,
+    name:         raw.name,
+    recordings,
+  };
+}
+
+function defaultSessionName(): string {
+  return 'Lesson, ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
 function makeLocalRecording(
@@ -72,7 +84,7 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
     supabase
       .from('practice_sessions')
       .select(`
-        id, created_at, completed_at,
+        id, created_at, completed_at, name,
         grammar_sessions (
           id, transcript, duration_sec, word_count, analyzed_at,
           created_at, practice_session_id, sort_order, speaker
@@ -94,10 +106,12 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
   // recording is added — required because grammar_sessions.practice_session_id
   // has a FK constraint and will reject a local placeholder uuid.
   const startSession = useCallback(async (): Promise<PracticeSession> => {
+    const name  = defaultSessionName();
     const local: PracticeSession = {
       id:           crypto.randomUUID(),
       created_at:   new Date().toISOString(),
       completed_at: null,
+      name,
       recordings:   [],
     };
     setActiveSession(local);
@@ -106,8 +120,8 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
 
     const { data, error } = await supabase
       .from('practice_sessions')
-      .insert({ user_id: userId })
-      .select('id, created_at, completed_at')
+      .insert({ user_id: userId, name })
+      .select('id, created_at, completed_at, name')
       .single();
 
     if (error) {
@@ -115,13 +129,12 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
       return local;
     }
 
-    const withDbId: PracticeSession = { ...local, id: data.id, created_at: data.created_at };
+    const withDbId: PracticeSession = { ...local, id: data.id, created_at: data.created_at, name: data.name };
     setActiveSession(withDbId);
     return withDbId;
   }, [userId]);
 
   // ── addRecording ──────────────────────────────────────────────────────────
-  // Adds the recording to local state immediately, then persists to DB.
   const addRecording = useCallback(async (
     transcript: string,
     durationSec: number,
@@ -131,7 +144,6 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
     const sessionId = activeSession?.id ?? crypto.randomUUID();
     const local     = makeLocalRecording(transcript, durationSec, sessionId, sortOrder, speaker);
 
-    // Optimistic update — visible immediately
     setActiveSession(prev => prev
       ? { ...prev, recordings: [...prev.recordings, local] }
       : null
@@ -159,7 +171,6 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
     }
 
     const saved = data as GrammarSession;
-    // Replace local placeholder with the real DB row
     setActiveSession(prev => prev
       ? { ...prev, recordings: prev.recordings.map(r => r.id === local.id ? saved : r) }
       : null
@@ -219,13 +230,19 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
   // ── updateRecording ───────────────────────────────────────────────────────
   const updateRecording = useCallback(async (recordingId: string, transcript: string): Promise<void> => {
     const wordCount = transcript.trim() ? transcript.trim().split(/\s+/).filter(Boolean).length : 0;
-    // Optimistic update in sessions list
     setSessions(prev => prev.map(s => ({
       ...s,
       recordings: s.recordings.map(r =>
         r.id === recordingId ? { ...r, transcript, word_count: wordCount } : r
       ),
     })));
+    // Also update in active session if present
+    setActiveSession(prev => prev ? {
+      ...prev,
+      recordings: prev.recordings.map(r =>
+        r.id === recordingId ? { ...r, transcript, word_count: wordCount } : r
+      ),
+    } : null);
     const { error } = await supabase
       .from('grammar_sessions')
       .update({ transcript, word_count: wordCount })
@@ -233,22 +250,36 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
     if (error) console.warn('Could not update recording:', error.message);
   }, []);
 
+  // ── renameSession ─────────────────────────────────────────────────────────
+  const renameSession = useCallback(async (sessionId: string, name: string): Promise<void> => {
+    setActiveSession(prev => prev?.id === sessionId ? { ...prev, name } : prev);
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, name } : s));
+    const { error } = await supabase
+      .from('practice_sessions')
+      .update({ name })
+      .eq('id', sessionId);
+    if (error) console.warn('Could not rename session:', error.message);
+  }, []);
+
   // ── saveSnippet ───────────────────────────────────────────────────────────
-  // All-in-one: creates a practice_session, inserts the recording, marks the
-  // session complete — so the caller only needs one call and the UI doesn't
-  // need to manage session lifecycle at all.
+  // If a named session is active, add the snippet to it.
+  // Otherwise: create a new one-off session, insert recording, mark complete.
   const saveSnippet = useCallback(async (
     transcript: string,
     durationSec: number,
     speaker: string | null = null,
   ): Promise<GrammarSession> => {
+    // Route into active session if one exists
+    if (activeSession) {
+      return addRecording(transcript, durationSec, speaker);
+    }
+
     const wordCount   = transcript.trim() ? transcript.trim().split(/\s+/).filter(Boolean).length : 0;
     const completedAt = new Date().toISOString();
 
-    // Optimistic local record so the feed updates immediately
-    const localId  = crypto.randomUUID();
+    // Optimistic local record
     const localRec: GrammarSession = {
-      id:                  localId,
+      id:                  crypto.randomUUID(),
       transcript,
       duration_sec:        durationSec,
       word_count:          wordCount,
@@ -262,13 +293,14 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
       id:           crypto.randomUUID(),
       created_at:   localRec.created_at,
       completed_at: completedAt,
+      name:         null,
       recordings:   [localRec],
     };
     setSessions(prev => [localSession, ...prev]);
 
     if (!userId) return localRec;
 
-    // 1. Create session
+    // 1. Create session (no name for standalone snippets)
     const { data: sd, error: se } = await supabase
       .from('practice_sessions')
       .insert({ user_id: userId })
@@ -295,15 +327,19 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
     // 3. Mark session complete
     await supabase.from('practice_sessions').update({ completed_at: completedAt }).eq('id', sd.id);
 
-    // Replace local placeholders with real DB rows
     const saved = rd as GrammarSession;
     setSessions(prev => prev.map(s =>
       s.id === localSession.id
-        ? { id: sd.id, created_at: sd.created_at, completed_at: completedAt, recordings: [saved] }
+        ? { id: sd.id, created_at: sd.created_at, completed_at: completedAt, name: null, recordings: [saved] }
         : s
     ));
     return saved;
-  }, [userId]);
+  }, [userId, activeSession, addRecording]);
 
-  return { sessions, activeSession, loading, startSession, addRecording, removeRecording, endSession, discardSession, deleteSession, updateRecording, saveSnippet };
+  return {
+    sessions, activeSession, loading,
+    startSession, addRecording, removeRecording,
+    endSession, discardSession, deleteSession,
+    updateRecording, renameSession, saveSnippet,
+  };
 }

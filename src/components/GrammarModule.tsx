@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Mic, Clock, X } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Clock, X } from 'lucide-react';
 import { useTranscription } from '../lib/useTranscription';
 import { usePracticeSession } from '../lib/usePracticeSession';
 import TranscriptPanel from './TranscriptPanel';
 import SessionDetail from './SessionDetail';
-import type { GrammarSession, PracticeSession } from '../lib/grammar';
+import SessionControlBar from './SessionControlBar';
+import { RecordingFeed, relativeTime, formatDuration } from './RecordingFeed';
+import type { PracticeSession } from '../lib/grammar';
 
 interface Props {
   userId: string | null;
@@ -13,249 +15,75 @@ interface Props {
   onSessionEnded: () => void;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear()
-    && a.getMonth()      === b.getMonth()
-    && a.getDate()       === b.getDate();
-}
-
-function groupByDate(recordings: GrammarSession[]) {
-  const groups: { key: string; label: string; items: GrammarSession[] }[] = [];
-  const today     = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-
-  for (const rec of recordings) {
-    const date = new Date(rec.created_at);
-    let label: string;
-    if      (isSameDay(date, today))     label = 'Today';
-    else if (isSameDay(date, yesterday)) label = 'Yesterday';
-    else label = date.toLocaleDateString(undefined, {
-      weekday: undefined, day: 'numeric', month: 'long', year: 'numeric',
-    }).toUpperCase();
-
-    const last = groups[groups.length - 1];
-    if (last && last.label === label) last.items.push(rec);
-    else groups.push({ key: label, label, items: [rec] });
-  }
-  return groups;
-}
-
-function relativeTime(iso: string): string {
-  const diff  = Date.now() - new Date(iso).getTime();
-  const mins  = Math.floor(diff / 60_000);
-  const hours = Math.floor(diff / 3_600_000);
-  const days  = Math.floor(diff / 86_400_000);
-  if (mins  <  1) return 'just now';
-  if (mins  < 60) return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days  <  7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
-
-function formatDuration(sec: number | null): string {
-  if (!sec) return '';
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
-
-// ── Recording row (feed entry) ────────────────────────────────────────────────
-const SPEAKER_COLORS: Record<string, string> = {
-  Teacher: 'text-amber-400',
-  Student: 'text-sky-400',
-};
-
-function RecordingRow({
-  rec,
-  onSave,
-}: {
-  rec: GrammarSession;
-  onSave: (id: string, text: string) => Promise<void>;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft,   setDraft]   = useState('');
-  const [saving,  setSaving]  = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const time = new Date(rec.created_at).toLocaleTimeString(undefined, {
-    hour: '2-digit', minute: '2-digit',
-  });
-
-  const autoResize = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
-  }, []);
-
-  const enterEdit = () => {
-    setDraft(rec.transcript);
-    setEditing(true);
-  };
-
-  useEffect(() => {
-    if (!editing) return;
-    // Focus + move cursor to end
-    const el = textareaRef.current;
-    if (!el) return;
-    el.focus();
-    el.setSelectionRange(el.value.length, el.value.length);
-    autoResize();
-  }, [editing, autoResize]);
-
-  const commitSave = useCallback(async () => {
-    if (saving) return;
-    if (draft === rec.transcript) { setEditing(false); return; }
-    setSaving(true);
-    await onSave(rec.id, draft);
-    setSaving(false);
-    setEditing(false);
-  }, [draft, rec.transcript, rec.id, onSave, saving]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      commitSave();
-    }
-    if (e.key === 'Escape') {
-      setEditing(false);
-      setDraft('');
-    }
-  };
-
-  return (
-    <div
-      className={`flex gap-5 px-5 py-4 transition-colors ${editing ? 'bg-zinc-800/40' : 'hover:bg-zinc-800/25 cursor-text'}`}
-      onClick={!editing ? enterEdit : undefined}
-    >
-      {/* Time + speaker */}
-      <div className="flex flex-col gap-0.5 shrink-0 w-[4.5rem] pt-0.5">
-        <span className="text-xs text-zinc-500 tabular-nums">{time}</span>
-        {rec.speaker && (
-          <span className={`text-[10px] font-medium ${SPEAKER_COLORS[rec.speaker] ?? 'text-zinc-400'}`}>
-            {rec.speaker}
-          </span>
-        )}
-      </div>
-
-      {/* Text or editor */}
-      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-        {editing ? (
-          <>
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              onChange={e => { setDraft(e.target.value); autoResize(); }}
-              onKeyDown={handleKeyDown}
-              onBlur={commitSave}
-              rows={1}
-              className="w-full bg-transparent text-sm text-zinc-200 leading-relaxed
-                resize-none outline-none border-b border-zinc-600 focus:border-zinc-400
-                transition-colors pb-0.5"
-            />
-            <p className="text-[10px] text-zinc-600 select-none">
-              {saving ? 'Saving…' : '↵ save · Esc cancel'}
-            </p>
-          </>
-        ) : (
-          <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
-            {rec.transcript}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Recording feed ────────────────────────────────────────────────────────────
-function RecordingFeed({
-  recordings, loading, userId, onSave,
-}: {
-  recordings: GrammarSession[];
-  loading: boolean;
-  userId: string | null;
-  onSave: (id: string, text: string) => Promise<void>;
-}) {
-  if (!userId) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-20 text-center">
-        <p className="text-zinc-500 text-sm">Log in to save recordings.</p>
-      </div>
-    );
-  }
-  if (loading) return <p className="text-xs text-zinc-600 py-12 text-center">Loading…</p>;
-  if (recordings.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-4 py-20 text-center">
-        <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center">
-          <Mic size={18} className="text-zinc-600" />
-        </div>
-        <p className="text-zinc-500 text-sm">No recordings yet.</p>
-        <p className="text-xs text-zinc-600">
-          Click Record or press{' '}
-          <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[11px] text-zinc-400">
-            ⌘⇧M
-          </kbd>{' '}
-          to start.
-        </p>
-      </div>
-    );
-  }
-
-  const groups = groupByDate(recordings);
-
-  return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-7">
-      {groups.map(({ key, label, items }) => (
-        <div key={key} className="flex flex-col gap-2.5">
-          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
-            {label}
-          </p>
-          <div className="rounded-xl border border-zinc-800 divide-y divide-zinc-800/80 overflow-hidden bg-zinc-900/40">
-            {items.map(rec => (
-              <RecordingRow key={rec.id} rec={rec} onSave={onSave} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Sessions list (view = 'sessions') ─────────────────────────────────────────
+// ── Sessions list ─────────────────────────────────────────────────────────────
 function CompletedSessionRow({
-  session, onDelete, onSelect,
+  session, onDelete, onSelect, onRename,
 }: {
   session: PracticeSession;
   onDelete: () => void;
   onSelect: () => void;
+  onRename: (name: string) => void;
 }) {
-  const [confirming, setConfirming] = useState(false);
+  const [confirming,  setConfirming]  = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft,   setNameDraft]   = useState('');
+
   const totalWords    = session.recordings.reduce((n, r) => n + (r.word_count   ?? 0), 0);
   const totalDuration = session.recordings.reduce((n, r) => n + (r.duration_sec ?? 0), 0);
   const first         = session.recordings[0];
-  const preview       = first?.transcript.slice(0, 160).trimEnd() ?? '';
-  const truncated     = (first?.transcript.length ?? 0) > 160;
+  const preview       = first?.transcript.slice(0, 140).trimEnd() ?? '';
+  const truncated     = (first?.transcript.length ?? 0) > 140;
+
+  const displayName = session.name
+    || new Date(session.completed_at ?? session.created_at).toLocaleDateString(undefined, {
+         day: 'numeric', month: 'long', year: 'numeric',
+       });
+
+  const startNameEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNameDraft(session.name ?? '');
+    setEditingName(true);
+  };
+
+  const commitName = () => {
+    setEditingName(false);
+    const trimmed = nameDraft.trim();
+    if (trimmed && trimmed !== session.name) onRename(trimmed);
+  };
 
   return (
     <div
-      className="group flex flex-col gap-2.5 px-4 py-4 rounded-xl bg-zinc-800/40 border border-zinc-700/50 hover:border-zinc-600/60 transition-colors cursor-pointer"
-      onClick={e => { if ((e.target as HTMLElement).closest('button')) return; onSelect(); }}
+      className="group flex flex-col gap-2 px-4 py-4 rounded-xl bg-zinc-800/40 border border-zinc-700/50 hover:border-zinc-600/60 transition-colors cursor-pointer"
+      onClick={e => { if ((e.target as HTMLElement).closest('button, input')) return; onSelect(); }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 text-xs text-zinc-500">
-          <span className="flex items-center gap-1.5">
-            <Clock size={11} />
-            {relativeTime(session.completed_at ?? session.created_at)}
-          </span>
-          <span className="text-zinc-600">
-            {session.recordings.length} recording{session.recordings.length !== 1 ? 's' : ''}
-          </span>
-          {totalWords    > 0 && <span className="text-zinc-600">{totalWords} words</span>}
-          {totalDuration > 0 && <span className="text-zinc-600">{formatDuration(totalDuration)}</span>}
+      {/* Name + delete */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={e => setNameDraft(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commitName(); }
+                if (e.key === 'Escape') setEditingName(false);
+              }}
+              className="w-full bg-transparent text-sm font-medium text-zinc-100 outline-none
+                border-b border-zinc-500 focus:border-zinc-300 transition-colors"
+              onClick={e => e.stopPropagation()}
+            />
+          ) : (
+            <p
+              className="text-sm font-medium text-zinc-100 truncate hover:text-white transition-colors"
+              onClick={startNameEdit}
+              title="Click to rename"
+            >
+              {displayName}
+            </p>
+          )}
         </div>
+
         {confirming ? (
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs text-zinc-500">Delete?</span>
@@ -265,12 +93,25 @@ function CompletedSessionRow({
         ) : (
           <button
             onClick={e => { e.stopPropagation(); setConfirming(true); }}
-            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-rose-400 transition-all"
+            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-rose-400 transition-all shrink-0"
           >
             <X size={13} />
           </button>
         )}
       </div>
+
+      {/* Meta */}
+      <div className="flex items-center gap-3 text-xs text-zinc-600">
+        <span className="flex items-center gap-1">
+          <Clock size={10} />
+          {relativeTime(session.completed_at ?? session.created_at)}
+        </span>
+        <span>{session.recordings.length} recording{session.recordings.length !== 1 ? 's' : ''}</span>
+        {totalWords    > 0 && <span>{totalWords} words</span>}
+        {totalDuration > 0 && <span>{formatDuration(totalDuration)}</span>}
+      </div>
+
+      {/* Preview */}
       {preview && (
         <p className="text-xs text-zinc-500 leading-relaxed">
           {preview}{truncated ? '…' : ''}
@@ -281,13 +122,14 @@ function CompletedSessionRow({
 }
 
 function CompletedSessionsList({
-  userId, sessions, loading, onDelete, onSelect,
+  userId, sessions, loading, onDelete, onSelect, onRename,
 }: {
   userId: string | null;
   sessions: PracticeSession[];
   loading: boolean;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
+  onRename: (id: string, name: string) => void;
 }) {
   if (!userId) {
     return (
@@ -301,7 +143,7 @@ function CompletedSessionsList({
     return (
       <div className="flex flex-col items-center gap-3 py-20 text-center">
         <p className="text-zinc-500 text-sm">No sessions yet.</p>
-        <p className="text-xs text-zinc-600">Head to Grammar Coach to start recording.</p>
+        <p className="text-xs text-zinc-600">Start a session from Grammar Coach to group your recordings.</p>
       </div>
     );
   }
@@ -313,6 +155,7 @@ function CompletedSessionsList({
           session={s}
           onDelete={() => onDelete(s.id)}
           onSelect={() => onSelect(s.id)}
+          onRename={name => onRename(s.id, name)}
         />
       ))}
     </div>
@@ -324,13 +167,14 @@ export default function GrammarModule({ userId, locale, view }: Props) {
   const {
     transcript, interimTranscript,
     isListening, isTranscribing,
-    supported, durationSec,
+    durationSec,
     start, stop, reset,
   } = useTranscription(locale);
 
   const {
-    sessions, loading,
-    saveSnippet, deleteSession, updateRecording,
+    sessions, activeSession, loading,
+    startSession, endSession, discardSession,
+    saveSnippet, deleteSession, updateRecording, renameSession,
   } = usePracticeSession(userId);
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -353,7 +197,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript, isListening, isTranscribing]);
 
-  // Keyboard shortcut: Space (when not focused on a text input)
+  // Keyboard shortcut: Space
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.code !== 'Space') return;
@@ -377,8 +221,10 @@ export default function GrammarModule({ userId, locale, view }: Props) {
       return (
         <SessionDetail
           session={selectedSession}
+          userId={userId}
           onBack={() => setSelectedSessionId(null)}
           onUpdateRecording={updateRecording}
+          onRename={name => renameSession(selectedSession.id, name)}
         />
       );
     }
@@ -389,6 +235,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
         loading={loading}
         onDelete={id => { deleteSession(id); if (selectedSessionId === id) setSelectedSessionId(null); }}
         onSelect={setSelectedSessionId}
+        onRename={(id, name) => renameSession(id, name)}
       />
     );
   }
@@ -409,7 +256,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
 
   // ── Coach view — feed ──────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       {/* Toolbar */}
       <div className="max-w-2xl mx-auto w-full flex items-center justify-between">
         <p className="text-[11px] text-zinc-600">
@@ -420,20 +267,33 @@ export default function GrammarModule({ userId, locale, view }: Props) {
           to record · again to stop
         </p>
 
-        {supported && (
+        {!activeSession && (
           <button
-            onClick={start}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium
-              bg-amber-900/30 hover:bg-amber-900/50 text-amber-300 border border-amber-800/40
+            onClick={() => startSession()}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium
+              bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-zinc-700/60
               transition-all duration-150 active:scale-95"
           >
-            <Mic size={14} />
-            Record
+            New session
           </button>
         )}
       </div>
 
-      <RecordingFeed recordings={allRecordings} loading={loading} userId={userId} onSave={updateRecording} />
+      {/* Active session control bar */}
+      {activeSession && (
+        <SessionControlBar
+          session={activeSession}
+          onEnd={endSession}
+          onDiscard={discardSession}
+        />
+      )}
+
+      <RecordingFeed
+        recordings={allRecordings}
+        loading={loading}
+        userId={userId}
+        onSave={updateRecording}
+      />
     </div>
   );
 }
