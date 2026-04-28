@@ -115,7 +115,7 @@ function RecordingRow({
   }, [draft, rec.transcript, rec.id, onSave, saving]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter') {
       e.preventDefault();
       commitSave();
     }
@@ -156,7 +156,7 @@ function RecordingRow({
                 transition-colors pb-0.5"
             />
             <p className="text-[10px] text-zinc-600 select-none">
-              {saving ? 'Saving…' : '↵ save · ⇧↵ new line · Esc cancel'}
+              {saving ? 'Saving…' : '↵ save · Esc cancel'}
             </p>
           </>
         ) : (
