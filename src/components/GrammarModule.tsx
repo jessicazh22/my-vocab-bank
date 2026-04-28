@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Mic, Clock, X } from 'lucide-react';
 import { useTranscription } from '../lib/useTranscription';
 import { usePracticeSession } from '../lib/usePracticeSession';
@@ -67,13 +67,70 @@ const SPEAKER_COLORS: Record<string, string> = {
   Student: 'text-sky-400',
 };
 
-function RecordingRow({ rec }: { rec: GrammarSession }) {
+function RecordingRow({
+  rec,
+  onSave,
+}: {
+  rec: GrammarSession;
+  onSave: (id: string, text: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft,   setDraft]   = useState('');
+  const [saving,  setSaving]  = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const time = new Date(rec.created_at).toLocaleTimeString(undefined, {
     hour: '2-digit', minute: '2-digit',
   });
 
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }, []);
+
+  const enterEdit = () => {
+    setDraft(rec.transcript);
+    setEditing(true);
+  };
+
+  useEffect(() => {
+    if (!editing) return;
+    // Focus + move cursor to end
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+    autoResize();
+  }, [editing, autoResize]);
+
+  const commitSave = useCallback(async () => {
+    if (saving) return;
+    if (draft === rec.transcript) { setEditing(false); return; }
+    setSaving(true);
+    await onSave(rec.id, draft);
+    setSaving(false);
+    setEditing(false);
+  }, [draft, rec.transcript, rec.id, onSave, saving]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      commitSave();
+    }
+    if (e.key === 'Escape') {
+      setEditing(false);
+      setDraft('');
+    }
+  };
+
   return (
-    <div className="flex gap-5 px-5 py-4 hover:bg-zinc-800/25 transition-colors">
+    <div
+      className={`flex gap-5 px-5 py-4 transition-colors ${editing ? 'bg-zinc-800/40' : 'hover:bg-zinc-800/25 cursor-text'}`}
+      onClick={!editing ? enterEdit : undefined}
+    >
+      {/* Time + speaker */}
       <div className="flex flex-col gap-0.5 shrink-0 w-[4.5rem] pt-0.5">
         <span className="text-xs text-zinc-500 tabular-nums">{time}</span>
         {rec.speaker && (
@@ -82,20 +139,44 @@ function RecordingRow({ rec }: { rec: GrammarSession }) {
           </span>
         )}
       </div>
-      <p className="text-sm text-zinc-200 leading-relaxed flex-1 min-w-0">
-        {rec.transcript}
-      </p>
+
+      {/* Text or editor */}
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        {editing ? (
+          <>
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={e => { setDraft(e.target.value); autoResize(); }}
+              onKeyDown={handleKeyDown}
+              onBlur={commitSave}
+              rows={1}
+              className="w-full bg-transparent text-sm text-zinc-200 leading-relaxed
+                resize-none outline-none border-b border-zinc-600 focus:border-zinc-400
+                transition-colors pb-0.5"
+            />
+            <p className="text-[10px] text-zinc-600 select-none">
+              {saving ? 'Saving…' : '↵ save · ⇧↵ new line · Esc cancel'}
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
+            {rec.transcript}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
 // ── Recording feed ────────────────────────────────────────────────────────────
 function RecordingFeed({
-  recordings, loading, userId,
+  recordings, loading, userId, onSave,
 }: {
   recordings: GrammarSession[];
   loading: boolean;
   userId: string | null;
+  onSave: (id: string, text: string) => Promise<void>;
 }) {
   if (!userId) {
     return (
@@ -134,7 +215,7 @@ function RecordingFeed({
           </p>
           <div className="rounded-xl border border-zinc-800 divide-y divide-zinc-800/80 overflow-hidden bg-zinc-900/40">
             {items.map(rec => (
-              <RecordingRow key={rec.id} rec={rec} />
+              <RecordingRow key={rec.id} rec={rec} onSave={onSave} />
             ))}
           </div>
         </div>
@@ -352,7 +433,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
         )}
       </div>
 
-      <RecordingFeed recordings={allRecordings} loading={loading} userId={userId} />
+      <RecordingFeed recordings={allRecordings} loading={loading} userId={userId} onSave={updateRecording} />
     </div>
   );
 }
