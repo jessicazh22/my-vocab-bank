@@ -388,7 +388,7 @@ export default function GrammarAnalysis({ session, onBack }: Props) {
                   >
                     {diffParts.map((p, di) =>
                       p.type === 'same' ? (
-                        <span key={di} className="text-zinc-500">{p.text}</span>
+                        <span key={di}>{p.text}</span>
                       ) : p.type === 'del' ? (
                         <span key={di} className="text-zinc-600 line-through decoration-zinc-700">
                           {p.text}
