@@ -178,7 +178,7 @@ function App() {
   const safeWordLogs = weeklyState.wordLogs ?? {};
 
   return (
-    <div className="min-h-screen bg-zinc-900 flex flex-col">
+    <div className="h-screen bg-zinc-900 flex flex-col overflow-hidden">
       {/* Top header */}
       <header className="border-b border-zinc-800/70 sticky top-0 bg-zinc-900/95 backdrop-blur z-40">
         <div className="px-6 py-3.5">
@@ -268,7 +268,7 @@ function App() {
       </header>
 
       {/* Body: sidebar + content */}
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-h-0">
         {/* Left sidebar nav */}
         <nav className="w-52 shrink-0 border-r border-zinc-800/70 px-3 py-8 flex flex-col gap-0.5">
           <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-3 mb-2">Modules</p>
