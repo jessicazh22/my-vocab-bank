@@ -5,6 +5,7 @@ import { usePracticeSession } from '../lib/usePracticeSession';
 import TranscriptPanel from './TranscriptPanel';
 import SessionDetail from './SessionDetail';
 import GrammarAnalysis from './GrammarAnalysis';
+import GrammarErrorSummary from './GrammarErrorSummary';
 import { RecordingFeed, relativeTime, formatDuration } from './RecordingFeed';
 import { GLORIA_SESSIONS } from '../data/gloriaData';
 import type { AnalyzedSession } from '../data/gloriaData';
@@ -197,9 +198,10 @@ export default function GrammarModule({ userId, locale, view }: Props) {
     saveSnippet, deleteSession, updateRecording,
   } = usePracticeSession(userId);
 
-  const [selectedSessionId,  setSelectedSessionId]  = useState<string | null>(null);
-  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
-  const [autoSaving,         setAutoSaving]          = useState(false);
+  const [selectedSessionId,   setSelectedSessionId]   = useState<string | null>(null);
+  const [selectedAnalysisId,  setSelectedAnalysisId]  = useState<string | null>(null);
+  const [analysisSubView,     setAnalysisSubView]      = useState<'summary' | 'transcript'>('summary');
+  const [autoSaving,          setAutoSaving]           = useState(false);
 
   // Flat feed: all recordings newest-first
   const allRecordings = useMemo(() =>
@@ -238,10 +240,20 @@ export default function GrammarModule({ userId, locale, view }: Props) {
     if (selectedAnalysisId) {
       const analysis = GLORIA_SESSIONS.find(s => s.id === selectedAnalysisId);
       if (analysis) {
+        if (analysisSubView === 'transcript') {
+          return (
+            <GrammarAnalysis
+              session={analysis}
+              onBack={() => setAnalysisSubView('summary')}
+              backLabel="Your errors"
+            />
+          );
+        }
         return (
-          <GrammarAnalysis
+          <GrammarErrorSummary
             session={analysis}
-            onBack={() => setSelectedAnalysisId(null)}
+            onBack={() => { setSelectedAnalysisId(null); setAnalysisSubView('summary'); }}
+            onViewTranscript={() => setAnalysisSubView('transcript')}
           />
         );
       }

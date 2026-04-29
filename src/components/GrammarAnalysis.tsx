@@ -7,6 +7,7 @@ import type { GrammarErrorCategory } from '../lib/grammar';
 interface Props {
   session: AnalyzedSession;
   onBack: () => void;
+  backLabel?: string;
 }
 
 // ── Correction colour per error category ──────────────────────────────────────
@@ -300,7 +301,7 @@ function ErrorSidebar({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function GrammarAnalysis({ session, onBack }: Props) {
+export default function GrammarAnalysis({ session, onBack, backLabel = 'Sessions' }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const activeError = activeId ? session.errors.find(e => e.id === activeId) ?? null : null;
@@ -349,7 +350,7 @@ export default function GrammarAnalysis({ session, onBack }: Props) {
           className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-10"
         >
           <ArrowLeft size={14} />
-          Sessions
+          {backLabel}
         </button>
 
         {/* Meta */}
