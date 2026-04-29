@@ -251,6 +251,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
                 error={error}
                 session={analysis}
                 allSessions={GLORIA_SESSIONS}
+                userId={userId}
                 onBack={() => setSelectedErrorId(null)}
               />
             );

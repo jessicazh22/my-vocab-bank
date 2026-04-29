@@ -4,6 +4,7 @@ import type { AnalyzedSession, GrammarErrorData } from '../data/gloriaData';
 import { CATEGORY_COLORS } from '../lib/grammar';
 import type { GrammarErrorCategory } from '../lib/grammar';
 import { inlineDiff } from '../lib/diff';
+import { useGrammarRatings } from '../lib/useGrammarRatings';
 
 const CORRECTION_TEXT: Record<GrammarErrorCategory, string> = {
   tense_consistency:       'text-amber-300',
@@ -35,14 +36,16 @@ const CORRECTION_TEXT: Record<GrammarErrorCategory, string> = {
   vague_reference:         'text-sky-300',
 };
 
+type CardState = 'hidden' | 'revealed' | 'yes' | 'no';
+
 interface Props {
   error: GrammarErrorData;
   session: AnalyzedSession;
   allSessions: AnalyzedSession[];
+  userId: string | null;
   onBack: () => void;
 }
 
-// Count how many OTHER sessions have this pattern
 function countErrorInOtherSessions(
   error: GrammarErrorData,
   currentSessionId: string,
@@ -50,15 +53,10 @@ function countErrorInOtherSessions(
 ): number {
   const patternName = error.grammar_pattern?.name ?? error.category;
   let count = 0;
-
   for (const s of allSessions) {
     if (s.id === currentSessionId) continue;
-    const hasPattern = s.errors.some(
-      e => (e.grammar_pattern?.name ?? e.category) === patternName
-    );
-    if (hasPattern) count++;
+    if (s.errors.some(e => (e.grammar_pattern?.name ?? e.category) === patternName)) count++;
   }
-
   return count;
 }
 
@@ -66,14 +64,16 @@ export default function PracticeDrill({
   error,
   session,
   allSessions,
+  userId,
   onBack,
 }: Props) {
   const [ruleRevealed, setRuleRevealed] = useState(false);
-  const [reveals, setReveals] = useState<boolean[]>(
-    error.practice_sentences ? Array(error.practice_sentences.length).fill(false) : []
+  const [cardStates, setCardStates] = useState<CardState[]>(
+    error.practice_sentences ? Array(error.practice_sentences.length).fill('hidden') : []
   );
 
-  // Keyboard: Escape to go back
+  const { rateCard } = useGrammarRatings(userId);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onBack();
@@ -85,12 +85,24 @@ export default function PracticeDrill({
   const colorClasses = CATEGORY_COLORS[error.category];
   const correctionColor = CORRECTION_TEXT[error.category];
   const otherSessions = countErrorInOtherSessions(error, session.id, allSessions);
+  const patternName = error.grammar_pattern?.name ?? error.category;
 
-  const toggleReveal = (index: number) => {
-    const newReveals = [...reveals];
-    newReveals[index] = !newReveals[index];
-    setReveals(newReveals);
+  const flipCard = (idx: number) => {
+    setCardStates(prev => {
+      const next = [...prev];
+      next[idx] = 'revealed';
+      return next;
+    });
   };
+
+  const rateAndSet = (idx: number, remembered: boolean) => {
+    const next = [...cardStates];
+    next[idx] = remembered ? 'yes' : 'no';
+    setCardStates(next);
+    rateCard(error.id, patternName, remembered);
+  };
+
+  const ratedCount = cardStates.filter(s => s === 'yes' || s === 'no').length;
 
   return (
     <div className="max-w-2xl mx-auto w-full flex flex-col pb-16">
@@ -172,7 +184,6 @@ export default function PracticeDrill({
           </div>
         </button>
 
-        {/* Error prevalence */}
         {otherSessions > 0 && (
           <p className="text-xs text-zinc-400 mt-2 pl-1">
             This pattern appears in {otherSessions} other session{otherSessions !== 1 ? 's' : ''}
@@ -190,17 +201,11 @@ export default function PracticeDrill({
           <span className="text-[13px] leading-relaxed">
             {inlineDiff(error.original, error.corrected).map((p, i) =>
               p.type === 'same' ? (
-                <span key={i} className="text-zinc-400">
-                  {p.text}
-                </span>
+                <span key={i} className="text-zinc-400">{p.text}</span>
               ) : p.type === 'del' ? (
-                <span key={i} className="text-zinc-600 line-through decoration-zinc-700">
-                  {p.text}
-                </span>
+                <span key={i} className="text-zinc-600 line-through decoration-zinc-700">{p.text}</span>
               ) : (
-                <span key={i} className={`font-semibold ${correctionColor}`}>
-                  {p.text}
-                </span>
+                <span key={i} className={`font-semibold ${correctionColor}`}>{p.text}</span>
               )
             )}
           </span>
@@ -222,55 +227,79 @@ export default function PracticeDrill({
       {error.practice_sentences && error.practice_sentences.length > 0 && (
         <div className="py-5 border-t border-zinc-800">
           <p className="text-xs font-semibold text-zinc-600 uppercase tracking-widest mb-4">
-            Now try these: ({reveals.filter(Boolean).length} / {error.practice_sentences.length})
+            Now try these: ({ratedCount} / {error.practice_sentences.length})
           </p>
 
           <div className="space-y-3">
             {error.practice_sentences.map((practice, idx) => {
-              const isRevealed = reveals[idx];
+              const state = cardStates[idx];
               const diffParts = inlineDiff(practice.text, practice.corrected);
 
               return (
-                <div key={practice.id} className="flex flex-col gap-2 p-4 rounded-lg bg-zinc-900/40 border border-zinc-800/50">
-                  {/* Front: Practice sentence */}
-                  <p className="text-sm text-zinc-300 leading-relaxed">
+                <div
+                  key={practice.id}
+                  className="relative flex flex-col gap-2 p-4 rounded-lg bg-zinc-900/40 border border-zinc-800/50"
+                >
+                  {/* Rating badge (top-right, shown when rated) */}
+                  {(state === 'yes' || state === 'no') && (
+                    <span className={`absolute top-3 right-3 text-xs font-semibold ${
+                      state === 'yes' ? 'text-emerald-400' : 'text-rose-400'
+                    }`}>
+                      {state === 'yes' ? '✓' : '✗'}
+                    </span>
+                  )}
+
+                  {/* Practice sentence (always shown) */}
+                  <p className="text-sm text-zinc-300 leading-relaxed pr-6">
                     {practice.text}
                   </p>
 
-                  {/* Back: Corrected version (revealed) */}
-                  {isRevealed && (
+                  {/* Stage 1 — hidden: flip button */}
+                  {state === 'hidden' && (
+                    <button
+                      onClick={() => flipCard(idx)}
+                      className="self-start text-xs text-zinc-600 hover:text-zinc-400 transition-colors mt-1 flex items-center gap-1"
+                    >
+                      <RotateCcw size={12} />
+                      Flip to reveal
+                    </button>
+                  )}
+
+                  {/* Stage 2+ — correction shown */}
+                  {state !== 'hidden' && (
                     <div className="pt-2 border-t border-zinc-800/50">
                       <span className="text-[13px] leading-relaxed">
                         {diffParts.map((p, i) =>
                           p.type === 'same' ? (
-                            <span key={i} className="text-zinc-400">
-                              {p.text}
-                            </span>
+                            <span key={i} className="text-zinc-400">{p.text}</span>
                           ) : p.type === 'del' ? (
-                            <span key={i} className="text-zinc-600 line-through decoration-zinc-700">
-                              {p.text}
-                            </span>
+                            <span key={i} className="text-zinc-600 line-through decoration-zinc-700">{p.text}</span>
                           ) : (
-                            <span key={i} className={`font-semibold ${correctionColor}`}>
-                              {p.text}
-                            </span>
+                            <span key={i} className={`font-semibold ${correctionColor}`}>{p.text}</span>
                           )
                         )}
                       </span>
                     </div>
                   )}
 
-                  {/* Flip button */}
-                  <button
-                    onClick={() => toggleReveal(idx)}
-                    className="self-start text-xs text-zinc-600 hover:text-zinc-400 transition-colors mt-1 flex items-center gap-1"
-                  >
-                    <RotateCcw
-                      size={12}
-                      className={`transition-transform ${isRevealed ? 'rotate-180' : ''}`}
-                    />
-                    {isRevealed ? 'Hide' : 'Flip'}
-                  </button>
+                  {/* Stage 2 — revealed: Yes / No buttons */}
+                  {state === 'revealed' && (
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-xs text-zinc-600">Did you remember it?</span>
+                      <button
+                        onClick={() => rateAndSet(idx, true)}
+                        className="text-xs px-2.5 py-1 rounded-md border text-emerald-400 border-emerald-800/40 hover:bg-emerald-950/40 transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => rateAndSet(idx, false)}
+                        className="text-xs px-2.5 py-1 rounded-md border text-rose-400 border-rose-800/40 hover:bg-rose-950/40 transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
