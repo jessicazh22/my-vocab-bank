@@ -442,10 +442,39 @@ export default function GrammarModule({ userId, locale, view }: Props) {
 
   // ── Transcripts view ──────────────────────────────────────────────────────────
   if (view === 'transcripts') {
+    // Check both Gloria sessions and user's sessions
+    const selectedAnalysis = selectedAnalysisId
+      ? GLORIA_SESSIONS.find(s => s.id === selectedAnalysisId) ?? null
+      : null;
+
     const selectedSession = selectedSessionId
       ? sessions.find(s => s.id === selectedSessionId) ?? null
       : null;
 
+    // If a Gloria session is selected, show GrammarErrorSummary (or SessionDetail if it supports AnalyzedSession)
+    if (selectedAnalysis && !selectedSessionId) {
+      return (
+        <GrammarErrorSummary
+          session={selectedAnalysis}
+          allSessions={GLORIA_SESSIONS}
+          onBack={() => { setSelectedAnalysisId(null); setAnalysisSubView('summary'); }}
+          onViewTranscript={() => setAnalysisSubView('transcript')}
+          onStartPractice={(errorId) => setSelectedErrorId(errorId)}
+        />
+      );
+    }
+
+    if (analysisSubView === 'transcript' && selectedAnalysis) {
+      return (
+        <GrammarAnalysis
+          session={selectedAnalysis}
+          onBack={() => setAnalysisSubView('summary')}
+          backLabel="Your errors"
+        />
+      );
+    }
+
+    // If a user session is selected, show SessionDetail
     if (selectedSession) {
       return (
         <SessionDetail
@@ -462,14 +491,47 @@ export default function GrammarModule({ userId, locale, view }: Props) {
     return (
       <div className="max-w-2xl mx-auto w-full flex flex-col gap-8 pb-16">
         <div className="py-5">
-          <h1 className="text-base font-semibold text-zinc-100 tracking-tight">Your transcripts</h1>
+          <h1 className="text-base font-semibold text-zinc-100 tracking-tight">Transcripts</h1>
           <p className="text-xs text-zinc-500 mt-0.5">
-            {sessions.length} recording{sessions.length !== 1 ? 's' : ''}
+            {GLORIA_SESSIONS.length} analysed + {sessions.length} of your own
           </p>
         </div>
 
-        {sessions.length > 0 ? (
-          <div className="flex flex-col gap-2 border-t border-zinc-800 pt-4">
+        {/* Gloria's analysed sessions */}
+        <div className="flex flex-col gap-2.5 border-t border-zinc-800 pt-4">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
+            Sample sessions
+          </p>
+          {GLORIA_SESSIONS.map(s => (
+            <div
+              key={s.id}
+              onClick={() => setSelectedAnalysisId(s.id)}
+              className="group flex flex-col gap-2.5 px-4 py-4 rounded-xl
+                bg-zinc-900/60 border border-zinc-800/60 hover:border-zinc-700/60
+                transition-colors cursor-pointer"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xs text-zinc-500">{s.speaker}</span>
+                </div>
+                <span className="text-[11px] text-zinc-700">
+                  {s.errors.length} error{s.errors.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <p className="text-sm font-medium text-zinc-300">{s.topic}</p>
+              <p className="text-xs text-zinc-600 leading-relaxed line-clamp-2">
+                {s.transcript.slice(0, 140).trimEnd()}…
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* User's recorded sessions */}
+        {sessions.length > 0 && (
+          <div className="flex flex-col gap-2.5 border-t border-zinc-800 pt-4">
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
+              Your recordings
+            </p>
             {sessions.map(s => (
               <CompletedSessionRow
                 key={s.id}
@@ -478,11 +540,6 @@ export default function GrammarModule({ userId, locale, view }: Props) {
                 onSelect={() => setSelectedSessionId(s.id)}
               />
             ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3 py-8 text-center border-t border-zinc-800 pt-4">
-            <p className="text-zinc-500 text-sm">No transcripts yet.</p>
-            <p className="text-xs text-zinc-600">Head to Grammar Coach to start recording.</p>
           </div>
         )}
       </div>
