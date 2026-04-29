@@ -174,7 +174,7 @@ export default function PracticeDrill({
 
         {/* Error prevalence */}
         {otherSessions > 0 && (
-          <p className="text-xs text-zinc-600 mt-2 pl-1">
+          <p className="text-xs text-zinc-400 mt-2 pl-1">
             This pattern appears in {otherSessions} other session{otherSessions !== 1 ? 's' : ''}
           </p>
         )}

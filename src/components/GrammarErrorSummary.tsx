@@ -220,14 +220,14 @@ function MediumGroup({ group }: { group: ErrorGroup }) {
   return (
     <div className="py-3.5 flex flex-col gap-2">
       <div className="flex flex-col gap-0.5">
-        <span className="text-[11px] text-zinc-500 font-medium">{group.tag}</span>
+        <span className="text-[11px] text-zinc-400 font-medium">{group.tag}</span>
         {group.rule && (
-          <p className="text-[11px] text-zinc-700 leading-relaxed">{group.rule}</p>
+          <p className="text-[11px] text-zinc-500 leading-relaxed">{group.rule}</p>
         )}
       </div>
       <div className="flex flex-col gap-1 pl-1">
         {group.errors.map(error => (
-          <InlinePair key={error.id} error={error} correctionColor={group.correctionColor} muted />
+          <InlinePair key={error.id} error={error} correctionColor={group.correctionColor} muted={false} />
         ))}
       </div>
     </div>
@@ -309,15 +309,15 @@ export default function GrammarErrorSummary({
         <>
           <div className="border-t border-zinc-800/30 mt-1" />
           <div className="py-4 flex flex-col gap-2">
-            <p className="text-[10px] text-zinc-700 uppercase tracking-widest mb-1">
+            <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">
               style
             </p>
-            <p className="text-[11px] text-zinc-700 italic mb-1">
+            <p className="text-[11px] text-zinc-400 italic mb-1">
               Valid but could sound more natural
             </p>
             {style.map(group =>
               group.errors.map(error => (
-                <InlinePair key={error.id} error={error} correctionColor="text-zinc-500" muted />
+                <InlinePair key={error.id} error={error} correctionColor="text-zinc-500" muted={false} />
               ))
             )}
           </div>
