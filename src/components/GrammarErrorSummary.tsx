@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Zap } from 'lucide-react';
 import type { AnalyzedSession, GrammarErrorData } from '../data/gloriaData';
 import { CATEGORY_COLORS } from '../lib/grammar';
 import type { GrammarErrorCategory } from '../lib/grammar';
@@ -6,8 +6,10 @@ import { inlineDiff } from '../lib/diff';
 
 interface Props {
   session: AnalyzedSession;
+  allSessions: AnalyzedSession[];
   onBack: () => void;
   onViewTranscript: () => void;
+  onStartPractice?: (errorId: string) => void;
 }
 
 // ── Correction colours ────────────────────────────────────────────────────────
@@ -168,17 +170,37 @@ function InlinePair({
 }
 
 // ── High-impact group — full visual weight ────────────────────────────────────
-function HighGroup({ group }: { group: ErrorGroup }) {
+function HighGroup({
+  group,
+  onStartPractice,
+}: {
+  group: ErrorGroup;
+  onStartPractice?: (errorId: string) => void;
+}) {
+  const hasPractice =
+    group.errors[0]?.practice_sentences && group.errors[0].practice_sentences.length > 0;
+
   return (
     <div className="py-5 flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${group.badgeClasses}`}>
-            {group.tag}
-          </span>
-          <span className="text-[11px] text-zinc-600">
-            {group.errors.length} error{group.errors.length !== 1 ? 's' : ''}
-          </span>
+        <div className="flex items-center justify-between gap-2.5 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${group.badgeClasses}`}>
+              {group.tag}
+            </span>
+            <span className="text-[11px] text-zinc-600">
+              {group.errors.length} error{group.errors.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          {hasPractice && onStartPractice && (
+            <button
+              onClick={() => onStartPractice(group.errors[0].id)}
+              className="flex items-center gap-1 text-xs text-zinc-500 hover:text-amber-300 transition-colors"
+            >
+              <Zap size={11} />
+              Practice
+            </button>
+          )}
         </div>
         {group.rule && (
           <p className="text-xs text-zinc-500 leading-relaxed">{group.rule}</p>
@@ -213,7 +235,13 @@ function MediumGroup({ group }: { group: ErrorGroup }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function GrammarErrorSummary({ session, onBack, onViewTranscript }: Props) {
+export default function GrammarErrorSummary({
+  session,
+  allSessions,
+  onBack,
+  onViewTranscript,
+  onStartPractice,
+}: Props) {
   const { high, medium, style } = groupErrors(session.errors);
 
   return (
@@ -254,7 +282,7 @@ export default function GrammarErrorSummary({ session, onBack, onViewTranscript 
       {high.map((group, i) => (
         <div key={group.key}>
           <div className={`border-t ${i === 0 ? 'border-zinc-800' : 'border-zinc-800/60'}`} />
-          <HighGroup group={group} />
+          <HighGroup group={group} onStartPractice={onStartPractice} />
         </div>
       ))}
 

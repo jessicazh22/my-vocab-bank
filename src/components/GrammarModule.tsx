@@ -6,6 +6,7 @@ import TranscriptPanel from './TranscriptPanel';
 import SessionDetail from './SessionDetail';
 import GrammarAnalysis from './GrammarAnalysis';
 import GrammarErrorSummary from './GrammarErrorSummary';
+import PracticeDrill from './PracticeDrill';
 import { RecordingFeed, relativeTime, formatDuration } from './RecordingFeed';
 import { GLORIA_SESSIONS } from '../data/gloriaData';
 import type { AnalyzedSession } from '../data/gloriaData';
@@ -200,6 +201,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
 
   const [selectedSessionId,   setSelectedSessionId]   = useState<string | null>(null);
   const [selectedAnalysisId,  setSelectedAnalysisId]  = useState<string | null>(null);
+  const [selectedErrorId,     setSelectedErrorId]     = useState<string | null>(null);
   const [analysisSubView,     setAnalysisSubView]      = useState<'summary' | 'transcript'>('summary');
   const [autoSaving,          setAutoSaving]           = useState(false);
 
@@ -240,6 +242,21 @@ export default function GrammarModule({ userId, locale, view }: Props) {
     if (selectedAnalysisId) {
       const analysis = GLORIA_SESSIONS.find(s => s.id === selectedAnalysisId);
       if (analysis) {
+        // Practice drill mode
+        if (selectedErrorId) {
+          const error = analysis.errors.find(e => e.id === selectedErrorId);
+          if (error) {
+            return (
+              <PracticeDrill
+                error={error}
+                session={analysis}
+                allSessions={GLORIA_SESSIONS}
+                onBack={() => setSelectedErrorId(null)}
+              />
+            );
+          }
+        }
+
         if (analysisSubView === 'transcript') {
           return (
             <GrammarAnalysis
@@ -252,8 +269,10 @@ export default function GrammarModule({ userId, locale, view }: Props) {
         return (
           <GrammarErrorSummary
             session={analysis}
+            allSessions={GLORIA_SESSIONS}
             onBack={() => { setSelectedAnalysisId(null); setAnalysisSubView('summary'); }}
             onViewTranscript={() => setAnalysisSubView('transcript')}
+            onStartPractice={(errorId) => setSelectedErrorId(errorId)}
           />
         );
       }

@@ -6,12 +6,21 @@ export interface GrammarErrorData {
   corrected: string;
   category: GrammarErrorCategory;
   explanation: string;
+  explanation_zh?: string;
   context: string;
   grammar_pattern?: {
     name: string;
+    name_zh?: string;
     structure: string;
+    structure_zh?: string;
     examples: string[];
+    examples_zh?: string[];
   };
+  practice_sentences?: Array<{
+    id: string;
+    text: string;
+    corrected: string;
+  }>;
 }
 
 export interface PositiveFeedbackData {
@@ -129,16 +138,46 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         corrected: 'good at managing her money',
         category: 'verb_pattern',
         explanation: "After prepositions like 'at', always use the gerund (verb + -ing), never the base verb.",
+        explanation_zh: '在 at 等介词后面，必须用动名词(-ing 形式)，不能用原型动词。',
         context: 'who is really [good at manage her money]',
         grammar_pattern: {
           name: '-ing after at / in / for',
+          name_zh: '介词后用 -ing 形式',
           structure: 'after at / in / about / for / rather than, always use -ing',
+          structure_zh: 'at / in / about / for / rather than 后面，总是用 -ing 形式',
           examples: [
             "good at managing (not 'manage')",
             "interested in learning (not 'learn')",
             "tired of waiting (not 'wait')",
           ],
+          examples_zh: [
+            '擅长管理(good at managing)',
+            '对学习感兴趣(interested in learning)',
+            '厌倦等待(tired of waiting)',
+          ],
         },
+        practice_sentences: [
+          {
+            id: 'p1',
+            text: 'She is very good at cook delicious meals.',
+            corrected: 'She is very good at cooking delicious meals.',
+          },
+          {
+            id: 'p2',
+            text: 'I am interested in learn new languages.',
+            corrected: 'I am interested in learning new languages.',
+          },
+          {
+            id: 'p3',
+            text: 'Are you tired of work so hard every day?',
+            corrected: 'Are you tired of working so hard every day?',
+          },
+          {
+            id: 'p4',
+            text: 'He is not good at communicate with strangers.',
+            corrected: 'He is not good at communicating with strangers.',
+          },
+        ],
       },
       {
         id: 'G3',
@@ -162,15 +201,44 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         corrected: "we're all gonna order",
         category: 'verb_missing',
         explanation: "'Gonna' is informal for 'going to', but you still need the helping verb. Say 'we're all gonna order' or 'we will all order'.",
+        explanation_zh: '"Gonna" 需要加上 am/is/are。比如：we\'re gonna (不能说 we gonna)。',
         context: '[we all gonna order] the drinks',
         grammar_pattern: {
           name: "Gonna needs 'are / is'",
+          name_zh: "Gonna 前要加 am/is/are",
           structure: "subject + am/is/are + gonna + verb",
+          structure_zh: "主语 + am/is/are + gonna + 动词",
           examples: [
             "we're gonna order (not 'we gonna')",
             "I'm gonna go (not 'I gonna')",
           ],
+          examples_zh: [
+            "我们要点菜(we're gonna order)",
+            "我要去(I'm gonna go)",
+          ],
         },
+        practice_sentences: [
+          {
+            id: 'p1',
+            text: 'They gonna help us finish the project.',
+            corrected: "They're gonna help us finish the project.",
+          },
+          {
+            id: 'p2',
+            text: 'You gonna like this restaurant.',
+            corrected: "You're gonna like this restaurant.",
+          },
+          {
+            id: 'p3',
+            text: 'She gonna visit her parents next week.',
+            corrected: "She's gonna visit her parents next week.",
+          },
+          {
+            id: 'p4',
+            text: 'I gonna call you tomorrow.',
+            corrected: "I'm gonna call you tomorrow.",
+          },
+        ],
       },
       {
         id: 'G5',
@@ -202,7 +270,46 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         corrected: 'after that I just realised',
         category: 'tense_consistency',
         explanation: "You're narrating a past story, so use past tense 'realised', not present 'realise'.",
+        explanation_zh: '讲过去的故事要用过去时。比如：I realised (不能用 I realise)。',
         context: '[after that I just realise], I wasted a lot of my money',
+        grammar_pattern: {
+          name: 'Past tense',
+          name_zh: '过去时',
+          structure: 'When telling a past story, keep past tense: was, went, realised, had',
+          structure_zh: '讲故事的时候保持过去时：was, went, realised, had',
+          examples: [
+            'I realised I made a mistake',
+            'She was very sad when I left',
+            'He went to the store and bought milk',
+          ],
+          examples_zh: [
+            '我意识到我犯了错误(I realised)',
+            '她看到我离开时很伤心(She was)',
+            '他去商店买了牛奶(went, bought)',
+          ],
+        },
+        practice_sentences: [
+          {
+            id: 'p1',
+            text: 'When I see that movie, I feel very sad.',
+            corrected: 'When I saw that movie, I felt very sad.',
+          },
+          {
+            id: 'p2',
+            text: 'Last year, he travels to three countries.',
+            corrected: 'Last year, he travelled to three countries.',
+          },
+          {
+            id: 'p3',
+            text: 'She tells me that she loses her keys.',
+            corrected: 'She told me that she had lost her keys.',
+          },
+          {
+            id: 'p4',
+            text: 'We are very tired when we finish the project.',
+            corrected: 'We were very tired when we finished the project.',
+          },
+        ],
       },
       {
         id: 'G9',
