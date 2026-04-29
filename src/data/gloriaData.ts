@@ -90,15 +90,16 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         id: 'G2',
         original: 'pass my values to people to this society',
         corrected: 'pass my values on to people in this society',
-        category: 'phrasal_verb_errors',
-        explanation: "The phrasal verb is 'pass something on to someone'. Also, people live 'in' a society, not 'to' a society.",
+        category: 'preposition_errors',
+        explanation: "Two issues: (1) The phrasal verb is 'pass something ON to someone' — use 'on' after 'pass'. (2) People live 'IN' a society, not 'to' a society.",
         context: 'I wanna [pass my values to people to this society] through my career',
         grammar_pattern: {
-          name: 'pass on (phrasal verb)',
-          structure: 'pass + object + on + to + recipient',
+          name: 'Preposition (on / in / at)',
+          structure: 'on a (daily/weekly/regular/hourly) basis; pass on; live in',
           examples: [
-            'I want to pass on my knowledge to the next generation',
-            'She passed the message on to her colleagues',
+            'We meet on a weekly basis',
+            'I want to pass on my knowledge',
+            'People live in this society',
           ],
         },
       },
@@ -456,6 +457,15 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         category: 'tense_consistency',
         explanation: "You're telling a past story about the movie, so use past tense 'focused'.",
         context: 'who struggled with her schoolwork, [only focus on beauty]',
+        grammar_pattern: {
+          name: 'Past tense',
+          structure: 'When telling a past story, keep past tense: was, went, realised, had',
+          examples: [
+            'She focused on beauty (past tense)',
+            'He went to the university yesterday',
+            'They realized their mistake',
+          ],
+        },
       },
       {
         id: 'G3',
@@ -464,6 +474,15 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         category: 'tense_consistency',
         explanation: "Two issues: (1) Use past tense 'wanted' to match the story, and (2) complete the phrasal verb: 'hang out' not just 'hang'.",
         context: '[just want to hang with friends all day] in high school',
+        grammar_pattern: {
+          name: 'Past tense',
+          structure: 'When telling a past story, keep past tense: was, went, realised, had',
+          examples: [
+            'She wanted to hang out (past tense)',
+            'He went to the university yesterday',
+            'They realized their mistake',
+          ],
+        },
       },
       {
         id: 'G4',
@@ -489,6 +508,15 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         category: 'tense_consistency',
         explanation: "'Looked' is past, so 'don't' should be 'didn't' to keep consistent past tense.",
         context: "[looked down on her and don't believe], um, she can",
+        grammar_pattern: {
+          name: 'Past tense',
+          structure: 'When telling a past story, keep past tense: was, went, realised, had',
+          examples: [
+            'She looked and believed (consistent past tense)',
+            'He went to the university yesterday',
+            'They realized their mistake',
+          ],
+        },
       },
       {
         id: 'G6',
@@ -497,6 +525,15 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         category: 'tense_consistency',
         explanation: "In a past context, use 'could' not 'can'. Also use the phrasal verb 'get into' for entering university, not 'get in'.",
         context: "don't believe [she can get in uni]",
+        grammar_pattern: {
+          name: 'Past tense',
+          structure: 'When telling a past story, keep past tense: was, went, realised, had',
+          examples: [
+            'She could get into uni (past tense)',
+            'He went to the university yesterday',
+            'They realized their mistake',
+          ],
+        },
       },
       {
         id: 'G7',
@@ -544,6 +581,15 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         category: 'tense_consistency',
         explanation: "You're talking about the past (high school), so use past tense 'wanted', not present 'want'.",
         context: '[my teacher want us to watch] that in high school',
+        grammar_pattern: {
+          name: 'Past tense',
+          structure: 'When telling a past story, keep past tense: was, went, realised, had',
+          examples: [
+            'My teacher wanted to watch (past tense)',
+            'He went to the university yesterday',
+            'They realized their mistake',
+          ],
+        },
       },
       {
         id: 'G9',
