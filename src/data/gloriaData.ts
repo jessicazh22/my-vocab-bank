@@ -86,7 +86,7 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         explanation: "When imagining an unreal or hypothetical situation, English uses the subjunctive: 'if it were' (not 'if it is/it's'). Same pattern as 'if I were you'.",
         context: "So, [if it's me in the past], I would like to say...",
         grammar_pattern: {
-          name: 'subjunctive mood',
+          name: 'If it were',
           structure: 'if + subject + were (not was/is)',
           examples: [
             'If I were you, I would accept the offer',
@@ -115,7 +115,7 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         explanation: "Use 'have' for existing relationships. 'Got' suggests you recently acquired the friend. For ongoing connections, use 'have'.",
         context: 'So [I actually got a friend] who is really good at',
         grammar_pattern: {
-          name: 'have vs get for relationships',
+          name: 'Have vs got',
           structure: 'have = possess/ongoing; get = acquire/obtain',
           examples: [
             'I have a friend (existing relationship)',
@@ -131,8 +131,8 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         explanation: "After prepositions like 'at', always use the gerund (verb + -ing), never the base verb.",
         context: 'who is really [good at manage her money]',
         grammar_pattern: {
-          name: 'preposition + gerund',
-          structure: 'preposition + verb-ing (never infinitive or base verb)',
+          name: '-ing after at / in / for',
+          structure: 'after at / in / about / for / rather than, always use -ing',
           examples: [
             "good at managing (not 'manage')",
             "interested in learning (not 'learn')",
@@ -148,8 +148,8 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         explanation: "Demonstratives must match the noun's number. 'Skills' is plural, so use 'these', not 'this'.",
         context: 'I really want to [develop this, uh, money skills]',
         grammar_pattern: {
-          name: 'demonstrative agreement',
-          structure: 'this/that + singular · these/those + plural',
+          name: 'This / these',
+          structure: 'this/that = singular · these/those = plural',
           examples: [
             'this skill (singular)',
             'these skills (plural)',
@@ -164,8 +164,8 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         explanation: "'Gonna' is informal for 'going to', but you still need the helping verb. Say 'we're all gonna order' or 'we will all order'.",
         context: '[we all gonna order] the drinks',
         grammar_pattern: {
-          name: "gonna = going to (needs auxiliary)",
-          structure: "subject + will/am/are + gonna + verb",
+          name: "Gonna needs 'are / is'",
+          structure: "subject + am/is/are + gonna + verb",
           examples: [
             "we're gonna order (not 'we gonna')",
             "I'm gonna go (not 'I gonna')",
@@ -235,6 +235,14 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         category: 'verb_missing',
         explanation: "Same pattern — 'gonna' needs the helping verb. Say 'how you're gonna use it' or 'how you will use it'.",
         context: '[how you gonna use it] as a tool',
+        grammar_pattern: {
+          name: "Gonna needs 'are / is'",
+          structure: "subject + am/is/are + gonna + verb",
+          examples: [
+            "you're gonna use (not 'you gonna')",
+            "she's gonna help (not 'she gonna')",
+          ],
+        },
       },
       {
         id: 'G12',
@@ -244,11 +252,11 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         explanation: "Two issues: (1) After 'rather than', use the gerund 'letting', and (2) remove 'the' — use 'money' in general, not 'the money'.",
         context: '[rather than let the money control you]',
         grammar_pattern: {
-          name: 'rather than + gerund',
-          structure: 'rather than + verb-ing (gerund form)',
+          name: '-ing after at / in / for',
+          structure: 'after at / in / about / for / rather than, always use -ing',
           examples: [
             "rather than letting (not 'let')",
-            "rather than waiting (not 'wait')",
+            "good at managing (not 'manage')",
           ],
         },
       },
@@ -305,7 +313,7 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         explanation: "After 'one of', always use a plural noun. You're selecting one person from a group of teachers.",
         context: '[one of her teacher] looked down on her',
         grammar_pattern: {
-          name: 'one of + plural noun',
+          name: 'One of + plural',
           structure: 'one of + the/my/her + plural noun',
           examples: [
             "one of her teachers (not 'teacher')",
@@ -354,7 +362,7 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         explanation: "Keep parallel structure: both should be gerund phrases. 'Studying hard' is already a gerund, so use 'dreams coming true' to match.",
         context: 'is not about [studying hard and dream comes true]',
         grammar_pattern: {
-          name: 'parallel structure with gerunds',
+          name: 'Parallel structure',
           structure: 'verb-ing and verb-ing (keep same form)',
           examples: [
             'studying hard and working smart',
@@ -403,8 +411,8 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         explanation: "After modal verbs (might, could, should), always use the base form. Use 'get' (base), not 'got' (past).",
         context: '[you might got laughed at]',
         grammar_pattern: {
-          name: 'modal + base verb',
-          structure: 'modal verb + base form (not past)',
+          name: 'Might / could + base verb',
+          structure: 'modal verb + base form (not past tense)',
           examples: [
             "might get (not 'might got')",
             "could see (not 'could saw')",
