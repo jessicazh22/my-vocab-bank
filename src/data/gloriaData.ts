@@ -54,6 +54,37 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         category: 'preposition_errors',
         explanation: "'On a daily basis' is the fixed expression. We say 'on' a … basis (daily/weekly/regular), never 'in'.",
         context: 'working my ass off [in a daily basis]',
+        grammar_pattern: {
+          name: 'Preposition (on / in / at)',
+          structure: 'on a (daily/weekly/regular/hourly) basis',
+          examples: [
+            'We meet on a weekly basis',
+            'She exercises on a regular basis',
+            'They check progress on a monthly basis',
+          ],
+        },
+        practice_sentences: [
+          {
+            id: 'p1',
+            text: 'I work in a daily basis to improve my skills.',
+            corrected: 'I work on a daily basis to improve my skills.',
+          },
+          {
+            id: 'p2',
+            text: 'The team meets in a weekly basis to discuss projects.',
+            corrected: 'The team meets on a weekly basis to discuss projects.',
+          },
+          {
+            id: 'p3',
+            text: 'She studies in a regular basis for her exams.',
+            corrected: 'She studies on a regular basis for her exams.',
+          },
+          {
+            id: 'p4',
+            text: 'They review the data in a monthly basis.',
+            corrected: 'They review the data on a monthly basis.',
+          },
+        ],
       },
       {
         id: 'G2',
@@ -103,6 +134,28 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
             'I wish I were taller',
           ],
         },
+        practice_sentences: [
+          {
+            id: 'p1',
+            text: 'If I was you, I would take that job offer.',
+            corrected: 'If I were you, I would take that job offer.',
+          },
+          {
+            id: 'p2',
+            text: 'If it was possible, she would travel around the world.',
+            corrected: 'If it were possible, she would travel around the world.',
+          },
+          {
+            id: 'p3',
+            text: 'If I was in your situation, I would make a different choice.',
+            corrected: 'If I were in your situation, I would make a different choice.',
+          },
+          {
+            id: 'p4',
+            text: 'I wish I was taller so I could play basketball.',
+            corrected: 'I wish I were taller so I could play basketball.',
+          },
+        ],
       },
     ],
     positive: [],
@@ -449,9 +502,40 @@ export const GLORIA_SESSIONS: AnalyzedSession[] = [
         id: 'G7',
         original: 'she get into one of the best uni',
         corrected: 'she got into one of the best unis',
-        category: 'subject_verb_agreement',
-        explanation: "Two issues: (1) use past tense 'got', and (2) 'uni' is countable — use plural 'unis' after 'one of the best'.",
+        category: 'tense_consistency',
+        explanation: "Two issues: (1) use past tense 'got' to match the past story context, and (2) 'uni' is countable — use plural 'unis' after 'one of the best'.",
         context: '[she get into one of the best uni] in Japan',
+        grammar_pattern: {
+          name: 'Past tense',
+          structure: 'When telling a past story, keep past tense: was, went, realised, had',
+          examples: [
+            'She got into one of the best unis (past tense)',
+            'He went to the university yesterday',
+            'They realized their mistake',
+          ],
+        },
+        practice_sentences: [
+          {
+            id: 'p1',
+            text: 'Last year, she get into a top university in England.',
+            corrected: 'Last year, she got into a top university in England.',
+          },
+          {
+            id: 'p2',
+            text: 'When he apply to universities, he get accepted by three schools.',
+            corrected: 'When he applied to universities, he got accepted by three schools.',
+          },
+          {
+            id: 'p3',
+            text: 'She work hard and then she get the job she want.',
+            corrected: 'She worked hard and then she got the job she wanted.',
+          },
+          {
+            id: 'p4',
+            text: 'They finally get the best results after years of studying.',
+            corrected: 'They finally got the best results after years of studying.',
+          },
+        ],
       },
       {
         id: 'G8',
