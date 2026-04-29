@@ -16,7 +16,7 @@ import type { GrammarErrorCategory, GrammarSession, PracticeSession } from '../l
 interface Props {
   userId: string | null;
   locale: 'en-AU' | 'en-US';
-  view: 'coach' | 'sessions';
+  view: 'coach' | 'sessions' | 'transcripts';
   onSessionEnded: () => void;
 }
 
@@ -103,8 +103,13 @@ function buildLearningPlan(analyzedSessions: AnalyzedSession[]): {
   }
 
   const items: PlanItem[] = Array.from(map.values()).map(({ meta, errors, sessionIds }) => {
-    const withPractice = errors.find(e => e.practice_sentences && e.practice_sentences.length > 0);
-    return { ...meta, errorCount: errors.length, sessionCount: sessionIds.size, practiceError: withPractice ?? null, practiceSession: withPractice?._session ?? null };
+    // Pick the error with the most practice_sentences (most substantial drill)
+    const withPractice = errors.reduce((best, e) => {
+      const bestCount = best?.practice_sentences?.length ?? 0;
+      const eCount = e.practice_sentences?.length ?? 0;
+      return eCount > bestCount ? e : best;
+    }, null as GrammarErrorData | null);
+    return { ...meta, errorCount: errors.length, sessionCount: sessionIds.size, practiceError: withPractice, practiceSession: withPractice?._session ?? null };
   });
 
   const byCount = (a: PlanItem, b: PlanItem) => b.errorCount - a.errorCount;
@@ -432,6 +437,55 @@ export default function GrammarModule({ userId, locale, view }: Props) {
         onDelete={id => { deleteSession(id); if (selectedSessionId === id) setSelectedSessionId(null); }}
         onSelect={setSelectedSessionId}
       />
+    );
+  }
+
+  // ── Transcripts view ──────────────────────────────────────────────────────────
+  if (view === 'transcripts') {
+    const selectedSession = selectedSessionId
+      ? sessions.find(s => s.id === selectedSessionId) ?? null
+      : null;
+
+    if (selectedSession) {
+      return (
+        <SessionDetail
+          session={selectedSession}
+          userId={userId}
+          onBack={() => setSelectedSessionId(null)}
+          onUpdateRecording={updateRecording}
+        />
+      );
+    }
+
+    if (loading) return <p className="text-xs text-zinc-600 py-8 text-center">Loading…</p>;
+
+    return (
+      <div className="max-w-2xl mx-auto w-full flex flex-col gap-8 pb-16">
+        <div className="py-5">
+          <h1 className="text-base font-semibold text-zinc-100 tracking-tight">Your transcripts</h1>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            {sessions.length} recording{sessions.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+
+        {sessions.length > 0 ? (
+          <div className="flex flex-col gap-2 border-t border-zinc-800 pt-4">
+            {sessions.map(s => (
+              <CompletedSessionRow
+                key={s.id}
+                session={s}
+                onDelete={() => { deleteSession(s.id); if (selectedSessionId === s.id) setSelectedSessionId(null); }}
+                onSelect={() => setSelectedSessionId(s.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-8 text-center border-t border-zinc-800 pt-4">
+            <p className="text-zinc-500 text-sm">No transcripts yet.</p>
+            <p className="text-xs text-zinc-600">Head to Grammar Coach to start recording.</p>
+          </div>
+        )}
+      </div>
     );
   }
 

@@ -57,7 +57,7 @@ function App() {
   const { words, loading: wordsLoading, addWord, checkDuplicate, updateWord, deleteWord, archiveWord, unarchiveWord, bulkArchiveWords, practiceWord, setReviewDate } = useVocabulary();
   const { locale, setLocale } = useLocale();
   const [activeModule, setActiveModule]   = useState<'vocabulary' | 'grammar'>('vocabulary');
-  const [grammarView,  setGrammarView]    = useState<'coach' | 'sessions'>('coach');
+  const [grammarView,  setGrammarView]    = useState<'coach' | 'sessions' | 'transcripts'>('coach');
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showLearn, setShowLearn] = useState(false);
@@ -185,7 +185,7 @@ function App() {
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-medium tracking-tight text-zinc-100">
               {activeModule === 'grammar'
-                ? grammarView === 'sessions' ? 'Sessions' : 'Grammar Coach'
+                ? grammarView === 'sessions' ? 'Learning Plan' : grammarView === 'transcripts' ? 'Transcripts' : 'Grammar Coach'
                 : 'Vocabulary'}
             </h1>
 
@@ -307,7 +307,7 @@ function App() {
             </button>
 
             {/* Sessions sub-item */}
-            <div className="ml-[22px] pl-3 border-l border-zinc-700/40 mt-0.5 mb-0.5">
+            <div className="ml-[22px] pl-3 border-l border-zinc-700/40 mt-0.5 mb-0.5 space-y-0.5">
               <button
                 onClick={() => { setActiveModule('grammar'); setGrammarView('sessions'); }}
                 className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-[13px] transition-all duration-150 text-left ${
@@ -317,7 +317,18 @@ function App() {
                 }`}
               >
                 <Library size={12} className={activeModule === 'grammar' && grammarView === 'sessions' ? 'text-amber-400/70' : 'text-zinc-700'} />
-                Sessions
+                Learning Plan
+              </button>
+              <button
+                onClick={() => { setActiveModule('grammar'); setGrammarView('transcripts'); }}
+                className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-[13px] transition-all duration-150 text-left ${
+                  activeModule === 'grammar' && grammarView === 'transcripts'
+                    ? 'text-amber-300/90 bg-zinc-800/60'
+                    : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/30'
+                }`}
+              >
+                <Library size={12} className={activeModule === 'grammar' && grammarView === 'transcripts' ? 'text-amber-400/70' : 'text-zinc-700'} />
+                Transcripts
               </button>
             </div>
           </div>
