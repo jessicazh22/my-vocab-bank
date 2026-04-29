@@ -2,6 +2,7 @@ import { ArrowLeft, ChevronRight } from 'lucide-react';
 import type { AnalyzedSession, GrammarErrorData } from '../data/gloriaData';
 import { CATEGORY_COLORS } from '../lib/grammar';
 import type { GrammarErrorCategory } from '../lib/grammar';
+import { inlineDiff } from '../lib/diff';
 
 interface Props {
   session: AnalyzedSession;
@@ -40,7 +41,7 @@ const CORRECTION_TEXT: Record<GrammarErrorCategory, string> = {
   vague_reference:         'text-sky-300',
 };
 
-// Student-friendly fallback labels when no grammar_pattern.name exists
+// Student-friendly fallback labels (when no grammar_pattern.name)
 const STUDENT_LABELS: Record<GrammarErrorCategory, string> = {
   tense_consistency:       'Past tense',
   subject_verb_agreement:  'Subject + verb',
@@ -71,14 +72,13 @@ const STUDENT_LABELS: Record<GrammarErrorCategory, string> = {
   vague_reference:         'Too vague',
 };
 
-// High-impact: errors that most affect how native you sound
+// Badge = important, fix this. No badge = secondary. Style section = optional.
 const HIGH_IMPACT = new Set<GrammarErrorCategory>([
   'tense_consistency', 'subject_verb_agreement', 'modal_verb_pattern',
   'verb_form', 'verb_missing', 'verb_redundancy', 'irregular_verb_form',
   'phrasal_verb_errors', 'demonstrative_agreement', 'verb_pattern',
 ]);
 
-// Style suggestions: valid choices that could just be more natural
 const STYLE_CATEGORIES = new Set<GrammarErrorCategory>([
   'vague_reference', 'parallel_structure', 'word_choice',
   'sentence_structure', 'word_order', 'conjunction_misuse', 'redundant_words',
@@ -89,7 +89,7 @@ interface ErrorGroup {
   key: string;
   tag: string;
   rule: string;
-  colorClasses: string;
+  badgeClasses: string;
   correctionColor: string;
   isHighImpact: boolean;
   isStyle: boolean;
@@ -116,10 +116,8 @@ function groupErrors(errors: GrammarErrorData[]): {
         key,
         tag: error.grammar_pattern?.name ?? STUDENT_LABELS[error.category],
         rule: error.grammar_pattern?.structure ?? '',
-        colorClasses: isStyle
-          ? 'bg-zinc-800/60 text-zinc-500 border border-zinc-700/40'
-          : CATEGORY_COLORS[error.category],
-        correctionColor: isStyle ? 'text-zinc-400' : CORRECTION_TEXT[error.category],
+        badgeClasses: CATEGORY_COLORS[error.category],
+        correctionColor: CORRECTION_TEXT[error.category],
         isHighImpact,
         isStyle,
         errors: [error],
@@ -127,37 +125,55 @@ function groupErrors(errors: GrammarErrorData[]): {
     }
   }
 
-  const sort = (a: ErrorGroup, b: ErrorGroup) => b.errors.length - a.errors.length;
-
+  const byCount = (a: ErrorGroup, b: ErrorGroup) => b.errors.length - a.errors.length;
   const all = Array.from(map.values());
   return {
-    high:   all.filter(g => g.isHighImpact).sort(sort),
-    medium: all.filter(g => !g.isHighImpact && !g.isStyle).sort(sort),
+    high:   all.filter(g => g.isHighImpact).sort(byCount),
+    medium: all.filter(g => !g.isHighImpact && !g.isStyle).sort(byCount),
     style:  all.filter(g => g.isStyle),
   };
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Inline diff renderer ──────────────────────────────────────────────────────
+function InlinePair({
+  error,
+  correctionColor,
+  muted = false,
+}: {
+  error: GrammarErrorData;
+  correctionColor: string;
+  muted?: boolean;
+}) {
+  const parts = inlineDiff(error.original, error.corrected);
 
-function Divider({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 py-1">
-      <div className="flex-1 border-t border-dashed border-zinc-800" />
-      <span className="text-[10px] text-zinc-700 uppercase tracking-widest shrink-0">
-        {label}
-      </span>
-      <div className="flex-1 border-t border-dashed border-zinc-800" />
-    </div>
+    <span className="text-[13px] leading-relaxed">
+      {parts.map((p, i) =>
+        p.type === 'same' ? (
+          <span key={i} className={muted ? 'text-zinc-600' : 'text-zinc-400'}>
+            {p.text}
+          </span>
+        ) : p.type === 'del' ? (
+          <span key={i} className="text-zinc-600 line-through decoration-zinc-700">
+            {p.text}
+          </span>
+        ) : (
+          <span key={i} className={`font-semibold ${muted ? 'text-zinc-500' : correctionColor}`}>
+            {p.text}
+          </span>
+        ),
+      )}
+    </span>
   );
 }
 
-function GroupRow({ group }: { group: ErrorGroup }) {
+// ── High-impact group — full visual weight ────────────────────────────────────
+function HighGroup({ group }: { group: ErrorGroup }) {
   return (
     <div className="py-5 flex flex-col gap-3">
-      {/* Tag + count + rule */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${group.colorClasses}`}>
+          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${group.badgeClasses}`}>
             {group.tag}
           </span>
           <span className="text-[11px] text-zinc-600">
@@ -165,24 +181,31 @@ function GroupRow({ group }: { group: ErrorGroup }) {
           </span>
         </div>
         {group.rule && (
-          <p className="text-xs text-zinc-500 leading-relaxed">
-            {group.rule}
-          </p>
+          <p className="text-xs text-zinc-500 leading-relaxed">{group.rule}</p>
         )}
       </div>
-
-      {/* Error pairs */}
       <div className="flex flex-col gap-1.5 pl-1">
         {group.errors.map(error => (
-          <div key={error.id} className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-[13px] text-zinc-400 line-through decoration-zinc-600">
-              {error.original}
-            </span>
-            <span className="text-zinc-700 text-xs shrink-0">→</span>
-            <span className={`text-[13px] font-medium ${group.correctionColor}`}>
-              {error.corrected}
-            </span>
-          </div>
+          <InlinePair key={error.id} error={error} correctionColor={group.correctionColor} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Medium group — no badge, muted, compact ───────────────────────────────────
+function MediumGroup({ group }: { group: ErrorGroup }) {
+  return (
+    <div className="py-3.5 flex flex-col gap-2">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[11px] text-zinc-500 font-medium">{group.tag}</span>
+        {group.rule && (
+          <p className="text-[11px] text-zinc-700 leading-relaxed">{group.rule}</p>
+        )}
+      </div>
+      <div className="flex flex-col gap-1 pl-1">
+        {group.errors.map(error => (
+          <InlinePair key={error.id} error={error} correctionColor={group.correctionColor} muted />
         ))}
       </div>
     </div>
@@ -190,13 +213,11 @@ function GroupRow({ group }: { group: ErrorGroup }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-
 export default function GrammarErrorSummary({ session, onBack, onViewTranscript }: Props) {
   const { high, medium, style } = groupErrors(session.errors);
-  const totalGroups = high.length + medium.length + style.length;
 
   return (
-    <div className="max-w-2xl mx-auto w-full flex flex-col gap-0 pb-16">
+    <div className="max-w-2xl mx-auto w-full flex flex-col pb-16">
 
       {/* Nav */}
       <div className="py-5 flex items-center justify-between">
@@ -225,72 +246,57 @@ export default function GrammarErrorSummary({ session, onBack, onViewTranscript 
           <h1 className="text-base font-semibold text-zinc-100 tracking-tight">
             Your errors today
           </h1>
-          <span className="text-sm text-zinc-600">
-            · {session.errors.length} found
-          </span>
+          <span className="text-sm text-zinc-600">· {session.errors.length} found</span>
         </div>
       </div>
 
-      {/* Groups */}
-      <div className="flex flex-col">
+      {/* High-impact groups — solid dividers, full visual weight */}
+      {high.map((group, i) => (
+        <div key={group.key}>
+          <div className={`border-t ${i === 0 ? 'border-zinc-800' : 'border-zinc-800/60'}`} />
+          <HighGroup group={group} />
+        </div>
+      ))}
 
-        {/* High impact */}
-        {high.map((group, i) => (
-          <div key={group.key}>
-            <div className="border-t border-zinc-800" />
-            <GroupRow group={group} />
-            {i === high.length - 1 && medium.length === 0 && totalGroups > high.length && null}
-          </div>
-        ))}
-
-        {/* Also noticed divider + medium */}
-        {medium.length > 0 && (
-          <>
-            <div className="border-t border-zinc-800" />
-            {high.length > 0 && (
-              <div className="pt-4 pb-1">
-                <Divider label="also noticed" />
-              </div>
-            )}
-            {medium.map(group => (
-              <div key={group.key}>
-                <GroupRow group={group} />
-              </div>
-            ))}
-          </>
-        )}
-
-        {/* Style divider + style suggestions */}
-        {style.length > 0 && (
-          <>
-            {(high.length > 0 || medium.length > 0) && (
-              <div className="pt-2 pb-1">
-                <Divider label="style" />
-              </div>
-            )}
-            <div className="py-3 flex flex-col gap-1">
-              <p className="text-[11px] text-zinc-600 italic mb-1">
-                Valid but could sound more natural
-              </p>
-              {style.map(group =>
-                group.errors.map(error => (
-                  <div key={error.id} className="flex items-baseline gap-2 flex-wrap pl-1">
-                    <span className="text-[13px] text-zinc-600 line-through decoration-zinc-700">
-                      {error.original}
-                    </span>
-                    <span className="text-zinc-800 text-xs shrink-0">→</span>
-                    <span className="text-[13px] text-zinc-500">
-                      {error.corrected}
-                    </span>
-                  </div>
-                ))
-              )}
+      {/* Medium groups — "also noticed" label then no-badge compact rows */}
+      {medium.length > 0 && (
+        <>
+          <div className="border-t border-zinc-800/60" />
+          {high.length > 0 && (
+            <p className="text-[10px] text-zinc-700 uppercase tracking-widest pt-4 pb-1">
+              also noticed
+            </p>
+          )}
+          {medium.map((group, i) => (
+            <div key={group.key}>
+              {i > 0 && <div className="border-t border-zinc-800/30" />}
+              <MediumGroup group={group} />
             </div>
-          </>
-        )}
+          ))}
+        </>
+      )}
 
-        <div className="border-t border-zinc-800 mt-2" />
-      </div>
+      {/* Style section */}
+      {style.length > 0 && (
+        <>
+          <div className="border-t border-zinc-800/30 mt-1" />
+          <div className="py-4 flex flex-col gap-2">
+            <p className="text-[10px] text-zinc-700 uppercase tracking-widest mb-1">
+              style
+            </p>
+            <p className="text-[11px] text-zinc-700 italic mb-1">
+              Valid but could sound more natural
+            </p>
+            {style.map(group =>
+              group.errors.map(error => (
+                <InlinePair key={error.id} error={error} correctionColor="text-zinc-500" muted />
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      <div className="border-t border-zinc-800/30 mt-1" />
 
       {/* Footer */}
       <div className="pt-6">
