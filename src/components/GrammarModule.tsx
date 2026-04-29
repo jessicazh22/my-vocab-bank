@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Mic, Clock, X, Sparkles } from 'lucide-react';
+import { Mic, Clock, X, Zap } from 'lucide-react';
 import { useTranscription } from '../lib/useTranscription';
 import { usePracticeSession } from '../lib/usePracticeSession';
 import TranscriptPanel from './TranscriptPanel';
@@ -9,8 +9,9 @@ import GrammarErrorSummary from './GrammarErrorSummary';
 import PracticeDrill from './PracticeDrill';
 import { RecordingFeed, relativeTime, formatDuration } from './RecordingFeed';
 import { GLORIA_SESSIONS } from '../data/gloriaData';
-import type { AnalyzedSession } from '../data/gloriaData';
-import type { GrammarSession, PracticeSession } from '../lib/grammar';
+import type { AnalyzedSession, GrammarErrorData } from '../data/gloriaData';
+import { CATEGORY_COLORS } from '../lib/grammar';
+import type { GrammarErrorCategory, GrammarSession, PracticeSession } from '../lib/grammar';
 
 interface Props {
   userId: string | null;
@@ -19,38 +20,137 @@ interface Props {
   onSessionEnded: () => void;
 }
 
-// ── Analysed session card (Gloria's pre-annotated sessions) ───────────────────
-function AnalysedSessionCard({
-  session,
-  onSelect,
-}: {
-  session: AnalyzedSession;
-  onSelect: () => void;
+// ── Learning plan helpers ─────────────────────────────────────────────────────
+const LP_HIGH_IMPACT = new Set<GrammarErrorCategory>([
+  'tense_consistency', 'subject_verb_agreement', 'modal_verb_pattern',
+  'verb_form', 'verb_missing', 'verb_redundancy', 'irregular_verb_form',
+  'phrasal_verb_errors', 'demonstrative_agreement', 'verb_pattern',
+]);
+
+const LP_STYLE = new Set<GrammarErrorCategory>([
+  'vague_reference', 'parallel_structure', 'word_choice',
+  'sentence_structure', 'word_order', 'conjunction_misuse', 'redundant_words',
+]);
+
+const STUDENT_LABELS: Record<GrammarErrorCategory, string> = {
+  tense_consistency:       'Past tense',
+  subject_verb_agreement:  'Subject + verb',
+  modal_verb_pattern:      'Might / could + base verb',
+  article_misuse:          'The / a / an',
+  demonstrative_agreement: 'This / these',
+  singular_plural:         'Singular / plural',
+  uncountable_noun:        'Uncountable noun',
+  redundant_words:         'Extra word',
+  verb_pattern:            '-ing form',
+  verb_form:               'Verb ending',
+  verb_choice:             'Wrong verb',
+  verb_missing:            "Gonna needs 'are / is'",
+  verb_redundancy:         'Extra verb',
+  irregular_verb_form:     'Irregular verb',
+  comparative_form:        'Comparing',
+  preposition_errors:      'Preposition (on / in / at)',
+  phrasal_verb_errors:     'Phrasal verb',
+  conjunction_misuse:      'Connecting words',
+  conjunction_missing:     'Missing connector',
+  parallel_structure:      'Parallel structure',
+  sentence_structure:      'Sentence structure',
+  word_order:              'Word order',
+  pronoun_form:            'Pronoun',
+  subjunctive_errors:      'If it were',
+  word_form:               'Word form',
+  word_choice:             'Word choice',
+  vague_reference:         'Too vague',
+};
+
+interface PlanItem {
+  key: string;
+  tag: string;
+  rule: string;
+  badgeClasses: string;
+  isHighImpact: boolean;
+  isStyle: boolean;
+  errorCount: number;
+  sessionCount: number;
+  practiceError: GrammarErrorData | null;
+  practiceSession: AnalyzedSession | null;
+}
+
+function buildLearningPlan(analyzedSessions: AnalyzedSession[]): {
+  high: PlanItem[]; medium: PlanItem[]; style: PlanItem[];
+} {
+  type Tagged = GrammarErrorData & { _session: AnalyzedSession };
+  const tagged: Tagged[] = analyzedSessions.flatMap(s =>
+    s.errors.map(e => ({ ...e, _session: s }))
+  );
+
+  const map = new Map<string, { meta: Omit<PlanItem, 'errorCount' | 'sessionCount' | 'practiceError' | 'practiceSession'>; errors: Tagged[]; sessionIds: Set<string> }>();
+
+  for (const err of tagged) {
+    const key = err.grammar_pattern?.name ?? STUDENT_LABELS[err.category];
+    const isStyle = LP_STYLE.has(err.category);
+    const isHighImpact = LP_HIGH_IMPACT.has(err.category) && !isStyle;
+    if (map.has(key)) {
+      const entry = map.get(key)!;
+      entry.errors.push(err);
+      entry.sessionIds.add(err._session.id);
+    } else {
+      map.set(key, {
+        meta: { key, tag: key, rule: err.grammar_pattern?.structure ?? '', badgeClasses: CATEGORY_COLORS[err.category], isHighImpact, isStyle },
+        errors: [err],
+        sessionIds: new Set([err._session.id]),
+      });
+    }
+  }
+
+  const items: PlanItem[] = Array.from(map.values()).map(({ meta, errors, sessionIds }) => {
+    const withPractice = errors.find(e => e.practice_sentences && e.practice_sentences.length > 0);
+    return { ...meta, errorCount: errors.length, sessionCount: sessionIds.size, practiceError: withPractice ?? null, practiceSession: withPractice?._session ?? null };
+  });
+
+  const byCount = (a: PlanItem, b: PlanItem) => b.errorCount - a.errorCount;
+  return {
+    high:   items.filter(p => p.isHighImpact).sort(byCount),
+    medium: items.filter(p => !p.isHighImpact && !p.isStyle).sort(byCount),
+    style:  items.filter(p => p.isStyle),
+  };
+}
+
+function PlanRow({ item, onPractice, muted = false }: {
+  item: PlanItem;
+  onPractice: (sessionId: string, errorId: string) => void;
+  muted?: boolean;
 }) {
   return (
-    <div
-      onClick={onSelect}
-      className="group flex flex-col gap-2.5 px-4 py-4 rounded-xl
-        bg-zinc-900/60 border border-zinc-800/60 hover:border-zinc-700/60
-        transition-colors cursor-pointer"
-    >
+    <div className="py-3.5 flex flex-col gap-1">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex items-center gap-1.5 text-[11px] font-medium
-            text-sky-400/80 bg-sky-950/50 border border-sky-900/40 rounded-md px-2 py-0.5">
-            <Sparkles size={9} />
-            Analysed
+        <div className="flex items-center gap-2 flex-wrap">
+          {!muted ? (
+            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${item.badgeClasses}`}>
+              {item.tag}
+            </span>
+          ) : (
+            <span className="text-[11px] text-zinc-400 font-medium">{item.tag}</span>
+          )}
+          <span className="text-[11px] text-zinc-600">
+            {item.errorCount} error{item.errorCount !== 1 ? 's' : ''}
           </span>
-          <span className="text-xs text-zinc-500">{session.speaker}</span>
+          {item.sessionCount > 1 && (
+            <span className="text-[11px] text-amber-500/80 font-medium">· appeared again</span>
+          )}
         </div>
-        <span className="text-[11px] text-zinc-700">
-          {session.errors.length} correction{session.errors.length !== 1 ? 's' : ''}
-        </span>
+        {item.practiceError && item.practiceSession && (
+          <button
+            onClick={() => onPractice(item.practiceSession!.id, item.practiceError!.id)}
+            className="shrink-0 flex items-center gap-1 text-xs text-zinc-500 hover:text-amber-300 transition-colors"
+          >
+            <Zap size={11} />
+            Practice
+          </button>
+        )}
       </div>
-      <p className="text-sm font-medium text-zinc-300">{session.topic}</p>
-      <p className="text-xs text-zinc-600 leading-relaxed line-clamp-2">
-        {session.transcript.slice(0, 140).trimEnd()}…
-      </p>
+      {item.rule && (
+        <p className="text-[11px] text-zinc-500 leading-relaxed">{item.rule}</p>
+      )}
     </div>
   );
 }
@@ -111,56 +211,86 @@ function CompletedSessionRow({
   );
 }
 
-function CompletedSessionsList({
-  userId, sessions, loading, onDelete, onSelect, onSelectAnalysis,
+function LearningPlanView({
+  sessions, loading, onPractice, onDelete, onSelect,
 }: {
-  userId: string | null;
   sessions: PracticeSession[];
   loading: boolean;
+  onPractice: (sessionId: string, errorId: string) => void;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
-  onSelectAnalysis: (id: string) => void;
 }) {
-  const hasRecorded = sessions.length > 0;
-
-  if (!userId) {
-    return (
-      <div className="max-w-2xl mx-auto w-full flex flex-col gap-8">
-        {/* Always show Gloria's analysed sessions even when logged out */}
-        <div className="flex flex-col gap-2.5">
-          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
-            Analysed sessions
-          </p>
-          {GLORIA_SESSIONS.map(s => (
-            <AnalysedSessionCard key={s.id} session={s} onSelect={() => onSelectAnalysis(s.id)} />
-          ))}
-        </div>
-        <div className="flex flex-col items-center gap-4 py-8 text-center">
-          <p className="text-zinc-500 text-sm">Log in to save and view your sessions.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) return <p className="text-xs text-zinc-600 py-8 text-center">Loading…</p>;
+  const { high, medium, style } = buildLearningPlan(GLORIA_SESSIONS);
+  const totalErrors = high.reduce((n, p) => n + p.errorCount, 0)
+    + medium.reduce((n, p) => n + p.errorCount, 0)
+    + style.reduce((n, p) => n + p.errorCount, 0);
 
   return (
-    <div className="max-w-2xl mx-auto w-full flex flex-col gap-8">
-      {/* Analysed sessions — always visible */}
-      <div className="flex flex-col gap-2.5">
-        <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
-          Analysed sessions
+    <div className="max-w-2xl mx-auto w-full flex flex-col pb-16">
+
+      {/* Header */}
+      <div className="py-5">
+        <h1 className="text-base font-semibold text-zinc-100 tracking-tight">Your learning plan</h1>
+        <p className="text-xs text-zinc-500 mt-0.5">
+          {GLORIA_SESSIONS.length} sessions · {totalErrors} errors to work on
         </p>
-        {GLORIA_SESSIONS.map(s => (
-          <AnalysedSessionCard key={s.id} session={s} onSelect={() => onSelectAnalysis(s.id)} />
-        ))}
       </div>
 
-      {/* Recorded sessions */}
-      {hasRecorded && (
-        <div className="flex flex-col gap-2.5">
-          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
-            Recorded sessions
+      {/* High-priority patterns */}
+      {high.length > 0 && (
+        <div className="flex flex-col">
+          <div className="border-t border-zinc-800" />
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium pt-4 pb-1">
+            High priority
+          </p>
+          {high.map((item, i) => (
+            <div key={item.key}>
+              {i > 0 && <div className="border-t border-zinc-800/40" />}
+              <PlanRow item={item} onPractice={onPractice} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Medium patterns */}
+      {medium.length > 0 && (
+        <div className="flex flex-col">
+          <div className="border-t border-zinc-800/60 mt-2" />
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium pt-4 pb-1">
+            Also noticed
+          </p>
+          {medium.map((item, i) => (
+            <div key={item.key}>
+              {i > 0 && <div className="border-t border-zinc-800/30" />}
+              <PlanRow item={item} onPractice={onPractice} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Style patterns */}
+      {style.length > 0 && (
+        <div className="flex flex-col">
+          <div className="border-t border-zinc-800/30 mt-2" />
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium pt-4 pb-1">
+            Style
+          </p>
+          <p className="text-[11px] text-zinc-400 italic pb-2">Valid but could sound more natural</p>
+          {style.map((item, i) => (
+            <div key={item.key}>
+              {i > 0 && <div className="border-t border-zinc-800/20" />}
+              <PlanRow item={item} onPractice={onPractice} muted />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* User's recorded sessions */}
+      {!loading && sessions.length > 0 && (
+        <div className="flex flex-col">
+          <div className="border-t border-zinc-800/30 mt-4" />
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium pt-4 pb-2">
+            Your recordings
           </p>
           <div className="flex flex-col gap-2">
             {sessions.map(s => (
@@ -175,12 +305,6 @@ function CompletedSessionsList({
         </div>
       )}
 
-      {!hasRecorded && (
-        <div className="flex flex-col items-center gap-3 py-8 text-center">
-          <p className="text-zinc-500 text-sm">No recorded sessions yet.</p>
-          <p className="text-xs text-zinc-600">Head to Grammar Coach to start recording.</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -238,26 +362,27 @@ export default function GrammarModule({ userId, locale, view }: Props) {
 
   // ── Sessions view ──────────────────────────────────────────────────────────
   if (view === 'sessions') {
-    // Gloria's analysed sessions
-    if (selectedAnalysisId) {
+    // PracticeDrill — entered directly from learning plan (both IDs set)
+    if (selectedAnalysisId && selectedErrorId) {
+      const analysis = GLORIA_SESSIONS.find(s => s.id === selectedAnalysisId);
+      const error = analysis?.errors.find(e => e.id === selectedErrorId);
+      if (analysis && error) {
+        return (
+          <PracticeDrill
+            error={error}
+            session={analysis}
+            allSessions={GLORIA_SESSIONS}
+            userId={userId}
+            onBack={() => { setSelectedErrorId(null); setSelectedAnalysisId(null); }}
+          />
+        );
+      }
+    }
+
+    // GrammarErrorSummary / transcript — secondary path (analysisId set, no errorId)
+    if (selectedAnalysisId && !selectedErrorId) {
       const analysis = GLORIA_SESSIONS.find(s => s.id === selectedAnalysisId);
       if (analysis) {
-        // Practice drill mode
-        if (selectedErrorId) {
-          const error = analysis.errors.find(e => e.id === selectedErrorId);
-          if (error) {
-            return (
-              <PracticeDrill
-                error={error}
-                session={analysis}
-                allSessions={GLORIA_SESSIONS}
-                userId={userId}
-                onBack={() => setSelectedErrorId(null)}
-              />
-            );
-          }
-        }
-
         if (analysisSubView === 'transcript') {
           return (
             <GrammarAnalysis
@@ -279,7 +404,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
       }
     }
 
-    // Regular recorded sessions
+    // User's recorded session detail
     const selectedSession = selectedSessionId
       ? sessions.find(s => s.id === selectedSessionId) ?? null
       : null;
@@ -295,14 +420,17 @@ export default function GrammarModule({ userId, locale, view }: Props) {
       );
     }
 
+    // Default: Learning Plan
     return (
-      <CompletedSessionsList
-        userId={userId}
+      <LearningPlanView
         sessions={sessions}
         loading={loading}
+        onPractice={(sessionId, errorId) => {
+          setSelectedAnalysisId(sessionId);
+          setSelectedErrorId(errorId);
+        }}
         onDelete={id => { deleteSession(id); if (selectedSessionId === id) setSelectedSessionId(null); }}
         onSelect={setSelectedSessionId}
-        onSelectAnalysis={setSelectedAnalysisId}
       />
     );
   }

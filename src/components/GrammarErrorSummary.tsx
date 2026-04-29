@@ -98,6 +98,19 @@ interface ErrorGroup {
   errors: GrammarErrorData[];
 }
 
+function countPatternInOtherSessions(
+  patternKey: string,
+  currentSessionId: string,
+  allSessions: AnalyzedSession[],
+): number {
+  let count = 0;
+  for (const s of allSessions) {
+    if (s.id === currentSessionId) continue;
+    if (s.errors.some(e => (e.grammar_pattern?.name ?? e.category) === patternKey)) count++;
+  }
+  return count;
+}
+
 // ── Grouping ──────────────────────────────────────────────────────────────────
 function groupErrors(errors: GrammarErrorData[]): {
   high: ErrorGroup[];
@@ -172,9 +185,11 @@ function InlinePair({
 // ── High-impact group — full visual weight ────────────────────────────────────
 function HighGroup({
   group,
+  otherSessionCount,
   onStartPractice,
 }: {
   group: ErrorGroup;
+  otherSessionCount: number;
   onStartPractice?: (errorId: string) => void;
 }) {
   const hasPractice =
@@ -191,6 +206,11 @@ function HighGroup({
             <span className="text-[11px] text-zinc-600">
               {group.errors.length} error{group.errors.length !== 1 ? 's' : ''}
             </span>
+            {otherSessionCount > 0 && (
+              <span className="text-[11px] text-amber-500/80 font-medium">
+                · recurring
+              </span>
+            )}
           </div>
           {hasPractice && onStartPractice && (
             <button
@@ -204,6 +224,11 @@ function HighGroup({
         </div>
         {group.rule && (
           <p className="text-xs text-zinc-500 leading-relaxed">{group.rule}</p>
+        )}
+        {otherSessionCount > 0 && (
+          <p className="text-[11px] text-zinc-500">
+            Also made this mistake in {otherSessionCount} other session{otherSessionCount !== 1 ? 's' : ''} — worth practising
+          </p>
         )}
       </div>
       <div className="flex flex-col gap-1.5 pl-1">
@@ -282,7 +307,11 @@ export default function GrammarErrorSummary({
       {high.map((group, i) => (
         <div key={group.key}>
           <div className={`border-t ${i === 0 ? 'border-zinc-800' : 'border-zinc-800/60'}`} />
-          <HighGroup group={group} onStartPractice={onStartPractice} />
+          <HighGroup
+            group={group}
+            otherSessionCount={countPatternInOtherSessions(group.key, session.id, allSessions)}
+            onStartPractice={onStartPractice}
+          />
         </div>
       ))}
 
