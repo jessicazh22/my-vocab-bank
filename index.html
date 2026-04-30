@@ -2,15 +2,90 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Minimal Vocab Practice App</title>
-    <meta property="og:image" content="https://bolt.new/static/og_default.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png" />
+    <title>Vocabulary Bank — Coming Soon</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: #0a0a0b;
+        color: #fafafa;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+
+      .container {
+        max-width: 480px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #a1a1aa;
+        background: #18181b;
+        border: 1px solid #27272a;
+        border-radius: 6px;
+        padding: 0.3rem 0.7rem;
+        width: fit-content;
+      }
+
+      .badge::before {
+        content: '';
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #f59e0b;
+      }
+
+      h1 {
+        font-size: clamp(1.75rem, 5vw, 2.5rem);
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+        color: #fafafa;
+      }
+
+      .tagline {
+        font-size: 1rem;
+        line-height: 1.7;
+        color: #71717a;
+      }
+
+      .tagline strong {
+        color: #a1a1aa;
+        font-weight: 400;
+      }
+
+      .divider {
+        width: 32px;
+        height: 1px;
+        background: #27272a;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div class="container">
+      <span class="badge">Coming soon</span>
+      <h1>Vocabulary Bank</h1>
+      <div class="divider"></div>
+      <p class="tagline">
+        Your personal English speaking coach.<br />
+        <strong>Record yourself, see your errors, fix them for good.</strong>
+      </p>
+    </div>
   </body>
 </html>
