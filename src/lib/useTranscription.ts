@@ -72,6 +72,10 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   const usingDGRef   = useRef(false);           // true once DG WS opens successfully
   const dgQueueRef   = useRef<ArrayBuffer[]>([]); // audio buffered before WS open
 
+  // ── Web Speech API (real-time display, no API key needed) ────────────────
+  const recognitionRef  = useRef<SpeechRecognition | null>(null);
+  const srCommittedRef  = useRef('');           // SR final results accumulated
+
   // ── Whisper fallback ──────────────────────────────────────────────────────
   const prevTextRef  = useRef('');
 
@@ -143,6 +147,16 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
         dgQueueRef.current = [];
         // Deepgram is live — kill the Whisper fallback timer
         if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
+        // Stop Web Speech API — Deepgram owns transcription from here
+        if (recognitionRef.current) {
+          try { recognitionRef.current.stop(); } catch { /* ignore */ }
+          recognitionRef.current = null;
+        }
+        // Seed Deepgram committed text with whatever SR captured so far
+        if (srCommittedRef.current && !committedRef.current) {
+          committedRef.current = srCommittedRef.current;
+        }
+        srCommittedRef.current = '';
       };
 
       ws.onmessage = (event) => {
@@ -288,6 +302,55 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
 
       recorder.start(250);
 
+      // ── Web Speech API — real-time display fallback ──────────────────────
+      // Starts immediately with no API key. Results are shown until Deepgram
+      // takes over, at which point SR results are silently ignored.
+      const SpeechRec =
+        (window as unknown as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
+          .SpeechRecognition ??
+        (window as unknown as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
+          .webkitSpeechRecognition;
+
+      if (SpeechRec) {
+        const rec = new SpeechRec();
+        rec.continuous     = true;
+        rec.interimResults = true;
+        rec.lang           = locale;
+        srCommittedRef.current = '';
+
+        rec.onresult = (event: SpeechRecognitionEvent) => {
+          // Once Deepgram is live, let it own the transcript state
+          if (usingDGRef.current || !isActiveRef.current) return;
+          let interim = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            if (result.isFinal) {
+              const t = result[0].transcript.trim();
+              srCommittedRef.current = srCommittedRef.current ? `${srCommittedRef.current} ${t}` : t;
+            } else {
+              interim += result[0].transcript;
+            }
+          }
+          setTranscript(srCommittedRef.current);
+          setInterimTranscript(interim.trim());
+        };
+
+        rec.onerror = (e: SpeechRecognitionErrorEvent) => {
+          // 'no-speech' fires when there's silence — not a real error
+          if (e.error !== 'no-speech') console.warn('SpeechRecognition error:', e.error);
+        };
+
+        rec.onend = () => {
+          // Auto-restart if still recording and Deepgram hasn't taken over
+          if (isActiveRef.current && !usingDGRef.current && recognitionRef.current === rec) {
+            try { rec.start(); } catch { /* already stopped */ }
+          }
+        };
+
+        try { rec.start(); } catch (e) { console.warn('SpeechRecognition start failed:', e); }
+        recognitionRef.current = rec;
+      }
+
       setTranscript('');
       setInterimTranscript('');
       setIsListening(true);
@@ -311,6 +374,12 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   // ── stop ──────────────────────────────────────────────────────────────────
   const stop = useCallback(() => {
     isActiveRef.current = false;
+    // Stop Web Speech API
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
+    srCommittedRef.current = '';
     setInterimTranscript('');
     stopTimers();
     setIsTranscribing(true);
@@ -331,6 +400,12 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       dgSocketRef.current = null;
     }
 
+    // Stop Web Speech API
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
+    srCommittedRef.current = '';
     recorderRef.current?.stop();
     streamRef.current?.getTracks().forEach(t => t.stop());
     recorderRef.current  = null;
@@ -354,6 +429,10 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   useEffect(() => {
     return () => {
       isActiveRef.current = false;
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch { /* ignore */ }
+        recognitionRef.current = null;
+      }
       if (dgSocketRef.current) {
         try { dgSocketRef.current.close(); } catch { /* ignore */ }
         dgSocketRef.current = null;
