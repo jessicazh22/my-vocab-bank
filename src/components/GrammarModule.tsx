@@ -326,6 +326,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
   const {
     sessions, loading,
     saveSnippet, deleteSession, updateRecording,
+    startSession, endSession, activeSession, addRecording,
   } = usePracticeSession(userId);
 
   const [selectedSessionId,   setSelectedSessionId]   = useState<string | null>(null);
@@ -346,8 +347,10 @@ export default function GrammarModule({ userId, locale, view }: Props) {
   useEffect(() => {
     if (!transcript || isListening || isTranscribing || autoSaving) return;
     setAutoSaving(true);
-    saveSnippet(transcript, durationSec, null)
-      .finally(() => { reset(); setAutoSaving(false); });
+    const save = activeSession
+      ? addRecording(transcript, durationSec, null)
+      : saveSnippet(transcript, durationSec, null);
+    save.finally(() => { reset(); setAutoSaving(false); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript, isListening, isTranscribing]);
 
@@ -565,7 +568,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
   return (
     <div className="flex flex-col gap-6">
       {/* Toolbar */}
-      <div className="max-w-2xl mx-auto w-full flex items-center justify-between">
+      <div className="max-w-2xl mx-auto w-full flex items-center justify-between gap-4">
         <p className="text-[11px] text-zinc-600">
           Press{' '}
           <kbd className="px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[11px] text-zinc-500">
@@ -574,17 +577,48 @@ export default function GrammarModule({ userId, locale, view }: Props) {
           to record · again to stop
         </p>
 
-        {supported && (
-          <button
-            onClick={start}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium
-              bg-amber-900/30 hover:bg-amber-900/50 text-amber-300 border border-amber-800/40
-              transition-all duration-150 active:scale-95"
-          >
-            <Mic size={14} />
-            Record
-          </button>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {activeSession ? (
+            <>
+              <span className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                {activeSession.recordings.length} snippet{activeSession.recordings.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={endSession}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium
+                  bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-300
+                  border border-emerald-800/40 transition-all duration-150"
+              >
+                End session
+              </button>
+            </>
+          ) : (
+            <>
+              {userId && (
+                <button
+                  onClick={() => startSession()}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium
+                    text-zinc-500 hover:text-zinc-300 border border-zinc-800
+                    hover:border-zinc-700 transition-all duration-150"
+                >
+                  New session
+                </button>
+              )}
+              {supported && (
+                <button
+                  onClick={start}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium
+                    bg-amber-900/30 hover:bg-amber-900/50 text-amber-300 border border-amber-800/40
+                    transition-all duration-150 active:scale-95"
+                >
+                  <Mic size={14} />
+                  Record
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <RecordingFeed recordings={allRecordings} loading={loading} userId={userId} onSave={updateRecording} />
