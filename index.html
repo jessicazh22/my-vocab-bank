@@ -2,23 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vocabulary Bank — Coming Soon</title>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-      body {
+      #vb-soon {
+        position: fixed;
+        inset: 0;
         background: #0a0a0b;
-        color: #fafafa;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        min-height: 100vh;
+        z-index: 9999;
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 2rem;
       }
 
-      .container {
+      #vb-soon.vb-hidden { display: none; }
+
+      .vb-container {
         max-width: 480px;
         width: 100%;
         display: flex;
@@ -26,7 +29,7 @@
         gap: 1.5rem;
       }
 
-      .badge {
+      .vb-badge {
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
@@ -40,9 +43,10 @@
         border-radius: 6px;
         padding: 0.3rem 0.7rem;
         width: fit-content;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
 
-      .badge::before {
+      .vb-badge::before {
         content: '';
         display: inline-block;
         width: 6px;
@@ -51,41 +55,78 @@
         background: #f59e0b;
       }
 
-      h1 {
+      .vb-h1 {
         font-size: clamp(1.75rem, 5vw, 2.5rem);
         font-weight: 600;
         letter-spacing: -0.03em;
         line-height: 1.15;
         color: #fafafa;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
 
-      .tagline {
+      .vb-tagline {
         font-size: 1rem;
         line-height: 1.7;
         color: #71717a;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
 
-      .tagline strong {
+      .vb-tagline strong {
         color: #a1a1aa;
         font-weight: 400;
       }
 
-      .divider {
+      .vb-divider {
         width: 32px;
         height: 1px;
         background: #27272a;
       }
+
+      .vb-login {
+        position: fixed;
+        top: 1.25rem;
+        right: 1.5rem;
+        font-size: 12px;
+        color: #52525b;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        padding: 0.25rem 0;
+        transition: color 0.15s;
+      }
+
+      .vb-login:hover { color: #a1a1aa; }
     </style>
   </head>
   <body>
-    <div class="container">
-      <span class="badge">Coming soon</span>
-      <h1>Vocabulary Bank</h1>
-      <div class="divider"></div>
-      <p class="tagline">
-        Your personal English speaking coach.<br />
-        <strong>Record yourself, see your errors, fix them for good.</strong>
-      </p>
+    <!-- Coming soon overlay — hidden for returning users -->
+    <div id="vb-soon">
+      <button class="vb-login" onclick="dismiss()">Log in</button>
+      <div class="vb-container">
+        <span class="vb-badge">Coming soon</span>
+        <h1 class="vb-h1">Vocabulary Bank</h1>
+        <div class="vb-divider"></div>
+        <p class="vb-tagline">
+          Your personal English speaking coach.<br />
+          <strong>Record yourself, see your errors, fix them for good.</strong>
+        </p>
+      </div>
     </div>
+
+    <!-- React app -->
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+
+    <script>
+      function dismiss() {
+        localStorage.setItem('vb_preview', '1');
+        document.getElementById('vb-soon').classList.add('vb-hidden');
+      }
+      // Skip overlay for returning users
+      if (localStorage.getItem('vb_preview') === '1') {
+        document.getElementById('vb-soon').classList.add('vb-hidden');
+      }
+    </script>
   </body>
 </html>
