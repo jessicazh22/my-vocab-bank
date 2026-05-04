@@ -161,3 +161,28 @@
 .animate-card-enter {
   animation: card-enter 0.4s ease-out;
 }
+
+/* Word of the day — amber breathing glow */
+@keyframes featured-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12), 0 0 20px rgba(245, 158, 11, 0.07);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.28), 0 0 44px rgba(245, 158, 11, 0.14);
+  }
+}
+
+.animate-featured-glow {
+  animation: featured-glow 3s ease-in-out infinite;
+}
+
+/* ✦ sparkle on word-of-the-day label */
+@keyframes sparkle {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; text-shadow: 0 0 6px rgba(245, 158, 11, 0.7); }
+}
+
+.animate-sparkle {
+  display: inline-block;
+  animation: sparkle 2.5s ease-in-out infinite;
+}

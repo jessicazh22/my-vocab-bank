@@ -38,9 +38,9 @@ interface ContextMenuState {
 }
 
 const NAV_SECTIONS: { key: NavSection; label: string; Icon: React.ElementType; activeText: string; cardGlow: string }[] = [
-  { key: 'NEED_TO_LEARN', label: 'Need to Learn', Icon: BookOpen,  activeText: 'text-amber-300',   cardGlow: 'border-zinc-700/50 hover:border-zinc-500/50 hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]' },
-  { key: 'NEED_TO_USE',   label: 'Use More Often', Icon: RotateCcw, activeText: 'text-teal-300',    cardGlow: 'border-zinc-700/50 hover:border-zinc-500/50 hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]' },
-  { key: 'KNOW_WELL',     label: 'Know Well',      Icon: Check,     activeText: 'text-emerald-300', cardGlow: 'border-zinc-700/50 hover:border-zinc-500/50 hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]' },
+  { key: 'NEED_TO_LEARN', label: 'Need to Learn', Icon: BookOpen,  activeText: 'text-amber-300',   cardGlow: 'border-zinc-700/50 hover:border-amber-800/40 hover:shadow-[0_0_16px_rgba(245,158,11,0.07)]' },
+  { key: 'NEED_TO_USE',   label: 'Use More Often', Icon: RotateCcw, activeText: 'text-teal-300',    cardGlow: 'border-zinc-700/50 hover:border-amber-800/40 hover:shadow-[0_0_16px_rgba(245,158,11,0.07)]' },
+  { key: 'KNOW_WELL',     label: 'Know Well',      Icon: Check,     activeText: 'text-emerald-300', cardGlow: 'border-zinc-700/50 hover:border-amber-800/40 hover:shadow-[0_0_16px_rgba(245,158,11,0.07)]' },
 ];
 
 const QUEUE_RATING_COLORS: Record<string, string> = {
@@ -571,11 +571,12 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
                     return (
                       <div
                         onClick={() => setSelectedWord(wordOfTheDay)}
-                        className="mb-4 cursor-pointer group relative bg-zinc-800/60 border border-zinc-700/50
-                          hover:border-zinc-500/50 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]
-                          transition-all duration-150 rounded-xl px-6 py-5"
+                        className="mb-4 cursor-pointer group relative bg-zinc-800/60 border border-amber-800/25
+                          animate-featured-glow transition-all duration-150 rounded-xl px-6 py-5"
                       >
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-4">word of the day ✦</p>
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-4">
+                          word of the day <span className="animate-sparkle">✦</span>
+                        </p>
                         <p className="text-2xl font-medium text-zinc-100 tracking-tight mb-2">{wordOfTheDay.word}</p>
                         {wordOfTheDay.definition && (
                           <p className="text-sm text-zinc-400 leading-relaxed line-clamp-2 mb-3">{wordOfTheDay.definition}</p>
