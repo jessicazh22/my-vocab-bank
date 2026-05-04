@@ -468,7 +468,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
             <div className="flex items-center gap-1 text-[11px] text-zinc-600 mb-5">
               <button
                 onClick={() => setActiveSection('words')}
-                className={`px-2 py-1 rounded transition-colors ${
+                className={`px-2 py-1 rounded transition-colors font-bold ${
                   activeSection === 'words' ? 'bg-zinc-800 text-zinc-300' : 'hover:text-zinc-400'
                 }`}
               >
@@ -477,7 +477,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
               <span>/</span>
               <button
                 onClick={() => setActiveSection('sentences')}
-                className={`px-2 py-1 rounded transition-colors ${
+                className={`px-2 py-1 rounded transition-colors font-bold ${
                   activeSection === 'sentences' ? 'bg-zinc-800 text-zinc-300' : 'hover:text-zinc-400'
                 }`}
               >
@@ -528,7 +528,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
                   activeSection === 'archive' ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-500'
                 } ${dragOverArchive ? 'ring-2 ring-red-500/30 bg-zinc-800/60 text-zinc-500' : ''}`}
               >
-                archive{archived.length > 0 && ` (${archived.length})`}
+                archive
               </button>
             ) : archived.length > 0 && (
               <button
@@ -537,24 +537,24 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
                   activeSection === 'archive' ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-500'
                 }`}
               >
-                archive ({archived.length})
+                archive
+              </button>
+            )}
+
+            {/* Bulk archive — below archive */}
+            {!isReadOnly && !bulkArchiveMode && !weeklyMode && activeSection !== 'archive' && (
+              <button
+                onClick={() => setBulkArchiveMode(true)}
+                className="w-full text-left px-3 py-2 rounded-lg text-xs transition-colors text-zinc-700 hover:text-zinc-500 flex items-center gap-1.5"
+              >
+                <Archive size={11} />
+                bulk archive
               </button>
             )}
           </nav>
         </aside>
 
         <main className="flex-1 min-w-0">
-          {activeSection !== 'archive' && !bulkArchiveMode && !weeklyMode && (
-            <div className="flex justify-end mb-3">
-              <button
-                onClick={() => setBulkArchiveMode(true)}
-                className="text-xs text-zinc-600 hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-red-500/5 flex items-center gap-1.5"
-              >
-                <Archive size={12} />
-                Bulk archive
-              </button>
-            </div>
-          )}
 
           {activeSection === 'words' ? (
             <>

@@ -322,7 +322,8 @@ function App() {
         </nav>
 
         {/* Main content */}
-        <main className="flex-1 px-8 py-10 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto px-8 py-10">
           {activeModule === 'grammar' ? (
             <GrammarModule
               userId={user?.id ?? null}
@@ -365,6 +366,7 @@ function App() {
               onQueueSelectClose={() => { setShowQueueSelect(false); setQueueSelected([]); }}
             />
           )}
+          </div>
         </main>
       </div>
 
