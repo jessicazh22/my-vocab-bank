@@ -462,86 +462,100 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
   return (
     <>
       <div className="flex gap-8 items-start">
-        {/* ── Left sidebar nav ── */}
-        <aside className="w-44 shrink-0 flex flex-col gap-0.5">
-          {NAV_SECTIONS.map(({ key, label }) => {
-            const count = getWordsForSection(key).length;
-            const isActive = activeSection === 'words' && activeNavSection === key;
-            return (
+        <aside className="w-48 flex-shrink-0">
+          <nav className="sticky top-24 space-y-6">
+            {/* words / sentences switcher */}
+            <div className="flex items-center gap-1 text-[11px] text-zinc-600 mb-5">
               <button
-                key={key}
-                onClick={() => { setActiveSection('words'); setActiveNavSection(key); }}
-                onDragOver={(e) => { handleDragOver(e); setDragOverSection(key); }}
-                onDragLeave={() => setDragOverSection(null)}
-                onDrop={async (e) => {
-                  e.preventDefault();
-                  setDragOverSection(null);
-                  const wordId = e.dataTransfer.getData('wordId');
-                  if (wordId) await updateWord(wordId, getWordUpdatesForSection(key));
-                }}
-                className={`px-3 py-2 rounded-lg text-sm transition-all duration-150 text-left w-full ${
-                  isActive
-                    ? 'bg-zinc-800/80 text-zinc-100'
-                    : `text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 ${dragOverSection === key ? 'ring-1 ring-zinc-600' : ''}`
+                onClick={() => setActiveSection('words')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  activeSection === 'words' ? 'bg-zinc-800 text-zinc-300' : 'hover:text-zinc-400'
                 }`}
               >
-                {label}
-                {count > 0 && (
-                  <span className="ml-1.5 text-[11px] opacity-40">{count}</span>
-                )}
+                words
               </button>
-            );
-          })}
+              <span>/</span>
+              <button
+                onClick={() => setActiveSection('sentences')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  activeSection === 'sentences' ? 'bg-zinc-800 text-zinc-300' : 'hover:text-zinc-400'
+                }`}
+              >
+                sentences
+              </button>
+            </div>
 
-          {/* Sentences */}
-          <button
-            onClick={() => setActiveSection('sentences')}
-            className={`px-3 py-2 rounded-lg text-sm transition-all duration-150 text-left w-full ${
-              activeSection === 'sentences'
-                ? 'bg-zinc-800/80 text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
-            }`}
-          >
-            Sentences
-            {sentences.length > 0 && <span className="ml-1.5 text-[11px] opacity-40">{sentences.length}</span>}
-          </button>
+            {/* Words sub-nav */}
+            {activeSection === 'words' && (
+              <div className="space-y-1">
+                {NAV_SECTIONS.map(({ key, label, Icon, activeText }) => (
+                  <button
+                    key={key}
+                    onClick={() => setActiveNavSection(key)}
+                    onDragOver={(e) => { handleDragOver(e); setDragOverSection(key); }}
+                    onDragLeave={() => setDragOverSection(null)}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      setDragOverSection(null);
+                      const wordId = e.dataTransfer.getData('wordId');
+                      if (wordId) await updateWord(wordId, getWordUpdatesForSection(key));
+                    }}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                      activeNavSection === key
+                        ? `bg-zinc-800 ${activeText}`
+                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                    } ${dragOverSection === key ? 'ring-2 ring-teal-500/50 bg-zinc-800/60' : ''}`}
+                  >
+                    <Icon size={14} className="shrink-0" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
 
-          <div className="my-1 border-t border-zinc-800/60" />
-
-          {/* Archive */}
-          <button
-            onClick={() => setActiveSection('archive')}
-            onDragOver={(e) => { handleDragOver(e); setDragOverArchive(true); }}
-            onDragLeave={() => setDragOverArchive(false)}
-            onDrop={async (e) => {
-              e.preventDefault();
-              setDragOverArchive(false);
-              const wordId = e.dataTransfer.getData('wordId');
-              if (wordId) await archiveWord(wordId);
-            }}
-            className={`px-3 py-2 rounded-lg text-sm transition-all duration-150 text-left w-full ${
-              activeSection === 'archive'
-                ? 'bg-zinc-800/80 text-zinc-100'
-                : `text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 ${dragOverArchive ? 'ring-1 ring-zinc-600' : ''}`
-            }`}
-          >
-            Archive
-            {archived.length > 0 && <span className="ml-1.5 text-[11px] opacity-40">{archived.length}</span>}
-          </button>
-
-          {/* Bulk archive */}
-          {!isReadOnly && !bulkArchiveMode && !weeklyMode && activeSection !== 'archive' && (
-            <button
-              onClick={() => setBulkArchiveMode(true)}
-              className="px-3 py-2 rounded-lg text-sm transition-all duration-150 text-left w-full text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/40 flex items-center gap-1.5"
-            >
-              <Archive size={12} />
-              Bulk archive
-            </button>
-          )}
+            {/* Archive link */}
+            {!isReadOnly ? (
+              <button
+                onClick={() => setActiveSection('archive')}
+                onDragOver={(e) => { handleDragOver(e); setDragOverArchive(true); }}
+                onDragLeave={() => setDragOverArchive(false)}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  setDragOverArchive(false);
+                  const wordId = e.dataTransfer.getData('wordId');
+                  if (wordId) await archiveWord(wordId);
+                }}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all mt-4 ${
+                  activeSection === 'archive' ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-500'
+                } ${dragOverArchive ? 'ring-2 ring-red-500/30 bg-zinc-800/60 text-zinc-500' : ''}`}
+              >
+                archive{archived.length > 0 && ` (${archived.length})`}
+              </button>
+            ) : archived.length > 0 && (
+              <button
+                onClick={() => setActiveSection('archive')}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors mt-4 ${
+                  activeSection === 'archive' ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-500'
+                }`}
+              >
+                archive ({archived.length})
+              </button>
+            )}
+          </nav>
         </aside>
 
         <main className="flex-1 min-w-0">
+          {activeSection !== 'archive' && !bulkArchiveMode && !weeklyMode && (
+            <div className="flex justify-end mb-3">
+              <button
+                onClick={() => setBulkArchiveMode(true)}
+                className="text-xs text-zinc-600 hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-red-500/5 flex items-center gap-1.5"
+              >
+                <Archive size={12} />
+                Bulk archive
+              </button>
+            </div>
+          )}
 
           {activeSection === 'words' ? (
             <>
