@@ -500,13 +500,12 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
                       const wordId = e.dataTransfer.getData('wordId');
                       if (wordId) await updateWord(wordId, getWordUpdatesForSection(key));
                     }}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                       activeNavSection === key
                         ? `bg-zinc-800 ${activeText}`
                         : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
                     } ${dragOverSection === key ? 'ring-2 ring-teal-500/50 bg-zinc-800/60' : ''}`}
                   >
-                    <Icon size={14} className="shrink-0" />
                     {label}
                   </button>
                 ))}

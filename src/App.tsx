@@ -7,7 +7,7 @@ import ReviewMode from './components/ReviewMode';
 import ReviewModeSelector from './components/ReviewModeSelector';
 import WeeklyReview, { UsageLogEntry } from './components/WeeklyReview';
 import GrammarModule from './components/GrammarModule';
-import { Plus, LogOut, Settings, BookOpenCheck } from 'lucide-react';
+import { Plus, LogOut, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 // Hidden imports (This week + Practice — hidden from UI, keep for potential restoration)
 // import { Play, Zap } from 'lucide-react';
 
@@ -67,6 +67,7 @@ function App() {
   const [queueSelected, setQueueSelected] = useState<string[]>([]);
   const [showAuth, setShowAuth] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -193,7 +194,6 @@ function App() {
                       : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400'
                   }`}
                 >
-                  <BookOpenCheck size={18} />
                   Review
                   {dueWords.length > 0 && (
                     <span className="w-5 h-5 rounded-full bg-violet-500 text-zinc-900 text-[10px] font-bold flex items-center justify-center">
@@ -264,46 +264,61 @@ function App() {
       {/* Body: sidebar + content */}
       <div className="flex flex-1 min-h-0">
         {/* Left sidebar nav */}
-        <nav className="w-52 shrink-0 border-r border-zinc-800/70 px-3 py-8 flex flex-col gap-0.5">
-          {/* Vocabulary */}
-          <button
-            onClick={() => setActiveModule('vocabulary')}
-            className={`px-3 py-2.5 rounded-lg text-sm transition-all duration-150 text-left w-full ${
-              activeModule === 'vocabulary'
-                ? 'bg-zinc-800/80 text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
-            }`}
-          >
-            Vocabulary
-          </button>
-
-          {/* Grammar — with Sessions sub-item */}
-          <div className="flex flex-col">
+        <nav className={`shrink-0 border-r border-zinc-800/70 flex flex-col transition-all duration-200 ${sidebarCollapsed ? 'w-10' : 'w-52'}`}>
+          {/* Collapse toggle */}
+          <div className={`flex ${sidebarCollapsed ? 'justify-center' : 'justify-end'} px-2 pt-3 pb-1`}>
             <button
-              onClick={() => { setActiveModule('grammar'); setGrammarView('coach'); }}
-              className={`px-3 py-2.5 rounded-lg text-sm transition-all duration-150 text-left w-full ${
-                activeModule === 'grammar' && grammarView === 'coach'
-                  ? 'bg-zinc-800/80 text-zinc-100'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
-              }`}
+              onClick={() => setSidebarCollapsed(c => !c)}
+              className="p-1.5 rounded-md text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/60 transition-colors"
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              Grammar
+              {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
             </button>
+          </div>
 
-            {/* Sessions sub-item */}
-            <div className="ml-3 pl-3 border-l border-zinc-800 mt-0.5 mb-0.5 space-y-0.5">
+          {!sidebarCollapsed && (
+            <div className="px-3 pb-8 flex flex-col gap-0.5">
+              {/* Vocabulary */}
               <button
-                onClick={() => { setActiveModule('grammar'); setGrammarView('transcripts'); }}
-                className={`w-full px-2 py-1.5 rounded-lg text-[13px] transition-all duration-150 text-left ${
-                  activeModule === 'grammar' && grammarView === 'transcripts'
-                    ? 'text-zinc-300 bg-zinc-800/60'
-                    : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/30'
+                onClick={() => setActiveModule('vocabulary')}
+                className={`px-3 py-2.5 rounded-lg text-sm transition-all duration-150 text-left w-full ${
+                  activeModule === 'vocabulary'
+                    ? 'bg-zinc-800/80 text-zinc-100'
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
                 }`}
               >
-                Transcripts
+                Vocabulary
               </button>
+
+              {/* Grammar — with Sessions sub-item */}
+              <div className="flex flex-col">
+                <button
+                  onClick={() => { setActiveModule('grammar'); setGrammarView('coach'); }}
+                  className={`px-3 py-2.5 rounded-lg text-sm transition-all duration-150 text-left w-full ${
+                    activeModule === 'grammar' && grammarView === 'coach'
+                      ? 'bg-zinc-800/80 text-zinc-100'
+                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                  }`}
+                >
+                  Grammar
+                </button>
+
+                {/* Sessions sub-item */}
+                <div className="ml-3 pl-3 border-l border-zinc-800 mt-0.5 mb-0.5 space-y-0.5">
+                  <button
+                    onClick={() => { setActiveModule('grammar'); setGrammarView('transcripts'); }}
+                    className={`w-full px-2 py-1.5 rounded-lg text-[13px] transition-all duration-150 text-left ${
+                      activeModule === 'grammar' && grammarView === 'transcripts'
+                        ? 'text-zinc-300 bg-zinc-800/60'
+                        : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/30'
+                    }`}
+                  >
+                    Transcripts
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </nav>
 
         {/* Main content */}
