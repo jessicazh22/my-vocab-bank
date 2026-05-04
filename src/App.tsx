@@ -323,7 +323,7 @@ function App() {
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto px-8 py-10">
+          <div className="max-w-6xl mx-auto px-8 py-10">
           {activeModule === 'grammar' ? (
             <GrammarModule
               userId={user?.id ?? null}
