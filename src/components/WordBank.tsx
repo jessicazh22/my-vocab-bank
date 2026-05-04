@@ -449,7 +449,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
 
   return (
     <>
-      <div className="flex gap-8">
+      <div className="flex gap-8 items-start">
         <aside className="w-48 flex-shrink-0">
           <nav className="sticky top-24 space-y-6">
             {/* Top-level section switcher */}

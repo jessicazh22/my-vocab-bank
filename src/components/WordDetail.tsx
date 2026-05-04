@@ -38,21 +38,7 @@ interface PreviousEnrichment {
   scaffold_prompt?: string;
 }
 
-const PRACTICE_CTAS = [
-  'Now use it →',
-  'Your turn →',
-  'Write with it →',
-  'Put it to use →',
-  'Make it yours →',
-  'Time to write →',
-  'Try it out →',
-  'Use it in a sentence →',
-];
-
-function getPracticeCta(wordId: string): string {
-  const hash = wordId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return PRACTICE_CTAS[hash % PRACTICE_CTAS.length];
-}
+const PRACTICE_CTA = 'Use it in a sentence →';
 
 export default function WordDetail({ word, onClose, onWordUpdate, updateWord, practiceWord, setReviewDate, isReadOnly = false }: WordDetailProps) {
   const [learningMode, setLearningMode] = useState(false);
@@ -431,7 +417,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                     onClick={() => setShowCard(false)}
                     className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors font-medium"
                   >
-                    {getPracticeCta(word.id)}
+                    {PRACTICE_CTA}
                   </button>
                 </div>
               </div>
@@ -611,61 +597,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
             ) : (
               <>
                 <p className="text-zinc-300 leading-relaxed">{localWord.definition}</p>
-                {localWord.word_type === 'word' && localWord.definition && (() => {
-                  const synonym = localWord.distinction
-                    ? extractSynonym(localWord.distinction, localWord.word)
-                    : null;
-
-                  return (
-                    <div className="mt-1.5">
-                      {/* Collapsed button — shown when null (unchecked) or when user has collapsed */}
-                      {(!distinctionExpanded || localWord.distinction == null) && (
-                        <button
-                          onClick={() => {
-                            if (localWord.distinction == null) handleRegenerateDistinction();
-                            else setDistinctionExpanded(true);
-                          }}
-                          disabled={distinctionRegenerating}
-                          className="text-zinc-700 hover:text-zinc-500 text-xs transition-colors disabled:opacity-50"
-                        >
-                          {distinctionRegenerating
-                            ? <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" />checking...</span>
-                            : localWord.distinction == null
-                              ? 'How does it differ?'
-                              : `How does it differ from ${synonym ?? localWord.word}?`}
-                        </button>
-                      )}
-
-                      {/* Expanded distinction text */}
-                      {distinctionExpanded && localWord.distinction && (
-                        <div className="group flex items-start gap-1.5">
-                          <div className="flex-1">
-                            <button
-                              onClick={() => setDistinctionExpanded(false)}
-                              className="text-zinc-700 text-[10px] uppercase tracking-wide mr-1.5 hover:text-zinc-500 transition-colors"
-                              title="Collapse"
-                            >
-                              {synonym ? `vs. ${synonym}` : '▲'}
-                            </button>
-                            <p className="text-zinc-600 text-xs leading-relaxed italic inline">
-                              {localWord.distinction}
-                            </p>
-                          </div>
-                          {!isReadOnly && (
-                            <button
-                              onClick={handleRegenerateDistinction}
-                              disabled={distinctionRegenerating}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-700 hover:text-zinc-400 mt-0.5 shrink-0 disabled:opacity-50"
-                              title="Regenerate"
-                            >
-                              {distinctionRegenerating ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                {/* distinction hidden from UI — data preserved */}
               </>
             )}
           </div>
@@ -842,13 +774,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
               {setReviewDate && (
                 localWord.next_review_at ? (
                   <div className="flex items-center gap-3">
-                    <p className="text-xs text-zinc-600">
-                      Due {new Date(localWord.next_review_at) <= new Date()
-                        ? 'now'
-                        : `${Math.ceil((new Date(localWord.next_review_at).getTime() - Date.now()) / 86400000)} day${
-                            Math.ceil((new Date(localWord.next_review_at).getTime() - Date.now()) / 86400000) !== 1 ? 's' : ''
-                          }`}
-                    </p>
+                    <p className="text-xs text-zinc-600">In review queue</p>
                     <button
                       onClick={async () => {
                         await setReviewDate(word.id, null);
@@ -862,9 +788,9 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    <p className="text-[10px] text-zinc-500">Queue for review — how well do you know it?</p>
-                    <div className="grid grid-cols-4 gap-1">
-                      {(['again', 'hard', 'good', 'easy'] as Rating[]).map(r => {
+                    <p className="text-[10px] text-zinc-500">Add to review queue</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['good', 'easy'] as Rating[]).map(r => {
                         const days = computeDays(r, localWord.usefulness ?? 2);
                         return (
                           <button
@@ -876,15 +802,13 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                               setLocalWord(prev => ({ ...prev, next_review_at }));
                               onWordUpdate?.();
                             }}
-                            className={`py-1.5 rounded text-[10px] font-medium transition-colors flex flex-col items-center gap-0.5 ${
-                              r === 'again' ? 'bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50' :
-                              r === 'hard'  ? 'bg-orange-900/40 hover:bg-orange-900/70 text-orange-300 border border-orange-800/50' :
-                              r === 'good'  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200 border border-zinc-600' :
-                                              'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
+                            className={`py-2 rounded text-[11px] font-medium transition-colors ${
+                              r === 'good'
+                                ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700'
+                                : 'bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50'
                             }`}
                           >
-                            <span className="capitalize">{r}</span>
-                            <span className="opacity-60">~{days}d</span>
+                            {r === 'good' ? 'Know it' : 'Know it very well'}
                           </button>
                         );
                       })}
@@ -925,7 +849,7 @@ export default function WordDetail({ word, onClose, onWordUpdate, updateWord, pr
                 className="flex items-center gap-2 px-5 py-2.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg transition-colors border border-amber-600/30 text-sm"
               >
                 <GraduationCap size={16} />
-                {getPracticeCta(word.id)}
+                {PRACTICE_CTA}
               </button>
             </div>
           )}
