@@ -38,7 +38,7 @@ interface PreviousEnrichment {
   scaffold_prompt?: string;
 }
 
-const PRACTICE_CTA = 'Use it in a sentence →';
+const PRACTICE_CTA = 'Try it out →';
 
 export default function WordDetail({ word, onClose, onWordUpdate, updateWord, practiceWord, setReviewDate, isReadOnly = false }: WordDetailProps) {
   const [learningMode, setLearningMode] = useState(false);
