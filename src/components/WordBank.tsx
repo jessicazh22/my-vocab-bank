@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { VocabularyWord } from '../lib/supabase';
 import { getTagColor } from '../lib/utils';
 import { Trash2, BookOpen, RotateCcw, BookMarked, Heart, X, Check, Archive, CalendarPlus, CalendarCheck } from 'lucide-react';
@@ -38,9 +38,9 @@ interface ContextMenuState {
 }
 
 const NAV_SECTIONS: { key: NavSection; label: string; Icon: React.ElementType; activeText: string; cardGlow: string }[] = [
-  { key: 'NEED_TO_LEARN', label: 'Need to Learn', Icon: BookOpen,  activeText: 'text-amber-300',   cardGlow: 'border-zinc-700/50 hover:border-amber-600/25 hover:shadow-[0_0_20px_rgba(245,158,11,0.08)]'   },
-  { key: 'NEED_TO_USE',   label: 'Use More Often', Icon: RotateCcw, activeText: 'text-teal-300',    cardGlow: 'border-teal-900/30 hover:border-teal-600/30 hover:shadow-[0_0_20px_rgba(20,184,166,0.08)]'    },
-  { key: 'KNOW_WELL',     label: 'Know Well',      Icon: Check,     activeText: 'text-emerald-300', cardGlow: 'border-emerald-900/30 hover:border-emerald-600/30 hover:shadow-[0_0_20px_rgba(52,211,153,0.08)]' },
+  { key: 'NEED_TO_LEARN', label: 'Need to Learn', Icon: BookOpen,  activeText: 'text-amber-300',   cardGlow: 'border-zinc-700/50 hover:border-zinc-500/50 hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]' },
+  { key: 'NEED_TO_USE',   label: 'Use More Often', Icon: RotateCcw, activeText: 'text-teal-300',    cardGlow: 'border-zinc-700/50 hover:border-zinc-500/50 hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]' },
+  { key: 'KNOW_WELL',     label: 'Know Well',      Icon: Check,     activeText: 'text-emerald-300', cardGlow: 'border-zinc-700/50 hover:border-zinc-500/50 hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]' },
 ];
 
 const QUEUE_RATING_COLORS: Record<string, string> = {
@@ -120,6 +120,18 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
   };
 
   const activeWords = getWordsForSection(activeNavSection);
+
+  // Word of the day — deterministic daily pick from Need to Learn
+  const wordOfTheDay = useMemo(() => {
+    if (activeNavSection !== 'NEED_TO_LEARN') return null;
+    const words = getWordsForSection('NEED_TO_LEARN');
+    if (words.length === 0) return null;
+    const today = new Date().toDateString();
+    let hash = 0;
+    for (let i = 0; i < today.length; i++) hash = today.charCodeAt(i) + ((hash << 5) - hash);
+    return words[Math.abs(hash) % words.length];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNavSection, wordsAndPhrases]);
 
   const [dragOverSection, setDragOverSection] = useState<NavSection | null>(null);
   const [dragOverArchive, setDragOverArchive] = useState(false);
@@ -265,7 +277,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
           () => setSelectedWord(word)
         }
         onContextMenu={!isReadOnly && !anySelectMode ? (e) => handleContextMenu(e, word.id) : undefined}
-        className={`group relative bg-zinc-800/50 border rounded-lg p-4 transition-all cursor-pointer ${
+        className={`group relative bg-zinc-800/50 border rounded-lg p-4 transition-all duration-150 cursor-pointer ${
           queueSelectMode
             ? isQueueSelected
               ? 'border-violet-500/60 bg-violet-500/5 ring-1 ring-violet-500/30'
@@ -552,9 +564,39 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
               {activeWords.length === 0 ? (
                 <div className="text-zinc-600 text-sm italic py-8">No words here yet</div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {activeWords.map((word) => renderWordCard(word, activeNavSection))}
-                </div>
+                <>
+                  {/* Word of the day — featured card, Need to Learn only */}
+                  {wordOfTheDay && !weeklyMode && !bulkArchiveMode && !queueSelectMode && (() => {
+                    const tagColor = wordOfTheDay.source_tag ? getTagColor(wordOfTheDay.source_tag) : null;
+                    return (
+                      <div
+                        onClick={() => setSelectedWord(wordOfTheDay)}
+                        className="mb-4 cursor-pointer group relative bg-zinc-800/60 border border-zinc-700/50
+                          hover:border-zinc-500/50 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]
+                          transition-all duration-150 rounded-xl px-6 py-5"
+                      >
+                        <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-4">word of the day ✦</p>
+                        <p className="text-2xl font-medium text-zinc-100 tracking-tight mb-2">{wordOfTheDay.word}</p>
+                        {wordOfTheDay.definition && (
+                          <p className="text-sm text-zinc-400 leading-relaxed line-clamp-2 mb-3">{wordOfTheDay.definition}</p>
+                        )}
+                        {wordOfTheDay.source_tag && tagColor && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${tagColor.bg} ${tagColor.text} border ${tagColor.border}`}>
+                            <BookMarked size={9} />
+                            {wordOfTheDay.source_tag}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Regular grid — featured word excluded */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {activeWords
+                      .filter(w => !wordOfTheDay || w.id !== wordOfTheDay.id)
+                      .map((word) => renderWordCard(word, activeNavSection))}
+                  </div>
+                </>
               )}
             </>
           ) : activeSection === 'archive' ? (
