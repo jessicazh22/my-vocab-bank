@@ -183,12 +183,6 @@ function App() {
       <header className="border-b border-zinc-800/70 sticky top-0 bg-zinc-900/95 backdrop-blur z-40">
         <div className="px-6 py-3.5">
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-medium tracking-tight text-zinc-100">
-              {activeModule === 'grammar'
-                ? grammarView === 'transcripts' ? 'Transcripts' : 'Grammar Coach'
-                : 'Vocabulary'}
-            </h1>
-
             <div className="flex items-center gap-3">
               {activeModule === 'vocabulary' && !isReadOnly && words.length > 0 && (
                 <button
@@ -271,8 +265,6 @@ function App() {
       <div className="flex flex-1 min-h-0">
         {/* Left sidebar nav */}
         <nav className="w-52 shrink-0 border-r border-zinc-800/70 px-3 py-8 flex flex-col gap-0.5">
-          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-3 mb-2">Modules</p>
-
           {/* Vocabulary */}
           <button
             onClick={() => setActiveModule('vocabulary')}
