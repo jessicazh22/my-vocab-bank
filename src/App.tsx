@@ -185,7 +185,7 @@ function App() {
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-medium tracking-tight text-zinc-100">
               {activeModule === 'grammar'
-                ? grammarView === 'sessions' ? 'Learning Plan' : grammarView === 'transcripts' ? 'Transcripts' : 'Grammar Coach'
+                ? grammarView === 'transcripts' ? 'Transcripts' : 'Grammar Coach'
                 : 'Vocabulary'}
             </h1>
 
@@ -309,17 +309,6 @@ function App() {
             {/* Sessions sub-item */}
             <div className="ml-[22px] pl-3 border-l border-zinc-700/40 mt-0.5 mb-0.5 space-y-0.5">
               <button
-                onClick={() => { setActiveModule('grammar'); setGrammarView('sessions'); }}
-                className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-[13px] transition-all duration-150 text-left ${
-                  activeModule === 'grammar' && grammarView === 'sessions'
-                    ? 'text-amber-300/90 bg-zinc-800/60'
-                    : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/30'
-                }`}
-              >
-                <Library size={12} className={activeModule === 'grammar' && grammarView === 'sessions' ? 'text-amber-400/70' : 'text-zinc-700'} />
-                Learning Plan
-              </button>
-              <button
                 onClick={() => { setActiveModule('grammar'); setGrammarView('transcripts'); }}
                 className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-[13px] transition-all duration-150 text-left ${
                   activeModule === 'grammar' && grammarView === 'transcripts'
@@ -341,7 +330,7 @@ function App() {
               userId={user?.id ?? null}
               locale={locale}
               view={grammarView}
-              onSessionEnded={() => setGrammarView('sessions')}
+              onSessionEnded={() => setGrammarView('transcripts')}
             />
           ) : wordsLoading ? (
             <div className="text-center text-zinc-500">Loading...</div>

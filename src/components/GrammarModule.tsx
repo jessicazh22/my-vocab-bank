@@ -454,26 +454,13 @@ export default function GrammarModule({ userId, locale, view }: Props) {
       ? sessions.find(s => s.id === selectedSessionId) ?? null
       : null;
 
-    // Check transcript view first (takes precedence)
-    if (analysisSubView === 'transcript' && selectedAnalysis) {
+    // If a Gloria session is selected, go straight to the transcript
+    if (selectedAnalysis && !selectedSessionId) {
       return (
         <GrammarAnalysis
           session={selectedAnalysis}
-          onBack={() => setAnalysisSubView('summary')}
-          backLabel="Your errors"
-        />
-      );
-    }
-
-    // If a Gloria session is selected, show GrammarErrorSummary
-    if (selectedAnalysis && !selectedSessionId) {
-      return (
-        <GrammarErrorSummary
-          session={selectedAnalysis}
-          allSessions={GLORIA_SESSIONS}
           onBack={() => { setSelectedAnalysisId(null); setAnalysisSubView('summary'); }}
-          onViewTranscript={() => setAnalysisSubView('transcript')}
-          onStartPractice={(errorId) => setSelectedErrorId(errorId)}
+          backLabel="Transcripts"
         />
       );
     }
