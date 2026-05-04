@@ -285,13 +285,12 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
           dgSocketRef.current = null;
         }
 
-        // Final Whisper call — full audio, no prompt bias, authoritative result.
-        // Do NOT pass committed Deepgram text as prompt: Whisper treats the prompt
-        // as "already transcribed" and skips the beginning of the audio.
+        // Final Whisper call — full audio, authoritative result.
         const blob = new Blob([...allChunksRef.current], { type: mimeTypeRef.current });
         const text = await transcribeViaEdge(blob, mimeTypeRef.current, lang, '');
-        // Use Whisper if successful; else keep the Deepgram accumulated result
-        const finalText = text || committedRef.current;
+        // Fallback chain: Whisper → Deepgram committed → Web Speech API committed
+        const finalText = text || committedRef.current || srCommittedRef.current;
+        srCommittedRef.current = '';
         if (finalText) setTranscript(finalText);
         setIsTranscribing(false);
       };
@@ -373,12 +372,11 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   // ── stop ──────────────────────────────────────────────────────────────────
   const stop = useCallback(() => {
     isActiveRef.current = false;
-    // Stop Web Speech API
+    // Stop Web Speech API — srCommittedRef kept alive for recorder.onstop fallback
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
-    srCommittedRef.current = '';
     setInterimTranscript('');
     stopTimers();
     setIsTranscribing(true);
