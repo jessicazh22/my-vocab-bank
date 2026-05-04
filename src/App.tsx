@@ -152,11 +152,11 @@ function App() {
     );
   }
 
-  if (showAuth && !user) {
-    return <Auth onCancel={() => setShowAuth(false)} />;
+  if (!user) {
+    return <Auth />;
   }
 
-  const isReadOnly = !user;
+  const isReadOnly = false;
 
   const learnWords = words.filter(
     (w) => (w.category === 'LEARNING' || w.category === 'JUST_ADDED') && w.word_type !== 'sentence'
@@ -244,18 +244,9 @@ function App() {
                 )}
               </div>
 
-              {user ? (
-                <button onClick={signOut} className="p-2 text-zinc-400 hover:text-zinc-100 transition-colors">
-                  <LogOut size={20} />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowAuth(true)}
-                  className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors px-2 py-1"
-                >
-                  Log in
-                </button>
-              )}
+              <button onClick={signOut} className="p-2 text-zinc-400 hover:text-zinc-100 transition-colors">
+                <LogOut size={20} />
+              </button>
             </div>
           </div>
         </div>
