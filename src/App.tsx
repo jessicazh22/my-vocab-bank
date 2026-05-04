@@ -182,7 +182,7 @@ function App() {
       {/* Top header */}
       <header className="border-b border-zinc-800/70 sticky top-0 bg-zinc-900/95 backdrop-blur z-40">
         <div className="px-6 py-3.5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-end">
             <div className="flex items-center gap-3">
               {activeModule === 'vocabulary' && !isReadOnly && words.length > 0 && (
                 <button

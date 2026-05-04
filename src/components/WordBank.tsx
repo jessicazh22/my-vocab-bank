@@ -38,9 +38,9 @@ interface ContextMenuState {
 }
 
 const NAV_SECTIONS: { key: NavSection; label: string; Icon: React.ElementType; activeText: string; cardGlow: string }[] = [
-  { key: 'NEED_TO_LEARN', label: 'Need to Learn', Icon: BookOpen,  activeText: 'text-amber-300',   cardGlow: 'border-zinc-700/50 hover:border-violet-700/40 hover:shadow-[0_0_16px_rgba(139,92,246,0.10)]' },
-  { key: 'NEED_TO_USE',   label: 'Use More Often', Icon: RotateCcw, activeText: 'text-teal-300',    cardGlow: 'border-zinc-700/50 hover:border-violet-700/40 hover:shadow-[0_0_16px_rgba(139,92,246,0.10)]' },
-  { key: 'KNOW_WELL',     label: 'Know Well',      Icon: Check,     activeText: 'text-emerald-300', cardGlow: 'border-zinc-700/50 hover:border-violet-700/40 hover:shadow-[0_0_16px_rgba(139,92,246,0.10)]' },
+  { key: 'NEED_TO_LEARN', label: 'Need to Learn', Icon: BookOpen,  activeText: 'text-amber-300',   cardGlow: 'border-zinc-700/50 hover:border-zinc-500/50 hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]' },
+  { key: 'NEED_TO_USE',   label: 'Use More Often', Icon: RotateCcw, activeText: 'text-teal-300',    cardGlow: 'border-zinc-700/50 hover:border-zinc-500/50 hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]' },
+  { key: 'KNOW_WELL',     label: 'Know Well',      Icon: Check,     activeText: 'text-emerald-300', cardGlow: 'border-zinc-700/50 hover:border-zinc-500/50 hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]' },
 ];
 
 const QUEUE_RATING_COLORS: Record<string, string> = {
@@ -461,10 +461,10 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
 
   return (
     <>
-      <div>
-        {/* ── Tab strip ── */}
-        <div className="flex items-center border-b border-zinc-800/60 mb-6 gap-0">
-          {NAV_SECTIONS.map(({ key, label, activeText }) => {
+      <div className="flex gap-8 items-start">
+        {/* ── Left sidebar nav ── */}
+        <aside className="w-44 shrink-0 flex flex-col gap-0.5">
+          {NAV_SECTIONS.map(({ key, label }) => {
             const count = getWordsForSection(key).length;
             const isActive = activeSection === 'words' && activeNavSection === key;
             return (
@@ -479,10 +479,10 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
                   const wordId = e.dataTransfer.getData('wordId');
                   if (wordId) await updateWord(wordId, getWordUpdatesForSection(key));
                 }}
-                className={`px-4 py-2.5 text-sm -mb-px border-b-2 transition-all duration-150 whitespace-nowrap ${
+                className={`px-3 py-2 rounded-lg text-sm transition-all duration-150 text-left w-full ${
                   isActive
-                    ? `border-zinc-300 ${activeText}`
-                    : `border-transparent text-zinc-500 hover:text-zinc-300 ${dragOverSection === key ? 'border-zinc-600 text-zinc-400' : ''}`
+                    ? 'bg-zinc-800/80 text-zinc-100'
+                    : `text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 ${dragOverSection === key ? 'ring-1 ring-zinc-600' : ''}`
                 }`}
               >
                 {label}
@@ -493,31 +493,22 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
             );
           })}
 
-          {/* Sentences tab */}
+          {/* Sentences */}
           <button
             onClick={() => setActiveSection('sentences')}
-            className={`px-4 py-2.5 text-sm -mb-px border-b-2 transition-all duration-150 ${
+            className={`px-3 py-2 rounded-lg text-sm transition-all duration-150 text-left w-full ${
               activeSection === 'sentences'
-                ? 'border-zinc-300 text-zinc-100'
-                : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                ? 'bg-zinc-800/80 text-zinc-100'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
             }`}
           >
             Sentences
             {sentences.length > 0 && <span className="ml-1.5 text-[11px] opacity-40">{sentences.length}</span>}
           </button>
 
-          <div className="flex-1" />
+          <div className="my-1 border-t border-zinc-800/60" />
 
-          {/* Archive + bulk archive — right side */}
-          {!isReadOnly && !bulkArchiveMode && !weeklyMode && activeSection !== 'archive' && (
-            <button
-              onClick={() => setBulkArchiveMode(true)}
-              className="text-xs text-zinc-700 hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-red-500/5 flex items-center gap-1.5"
-            >
-              <Archive size={11} />
-              Bulk archive
-            </button>
-          )}
+          {/* Archive */}
           <button
             onClick={() => setActiveSection('archive')}
             onDragOver={(e) => { handleDragOver(e); setDragOverArchive(true); }}
@@ -528,18 +519,29 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
               const wordId = e.dataTransfer.getData('wordId');
               if (wordId) await archiveWord(wordId);
             }}
-            className={`px-4 py-2.5 text-sm -mb-px border-b-2 transition-all duration-150 ${
+            className={`px-3 py-2 rounded-lg text-sm transition-all duration-150 text-left w-full ${
               activeSection === 'archive'
-                ? 'border-zinc-300 text-zinc-100'
-                : `border-transparent text-zinc-600 hover:text-zinc-400 ${dragOverArchive ? 'border-zinc-600 text-zinc-400' : ''}`
+                ? 'bg-zinc-800/80 text-zinc-100'
+                : `text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 ${dragOverArchive ? 'ring-1 ring-zinc-600' : ''}`
             }`}
           >
             Archive
             {archived.length > 0 && <span className="ml-1.5 text-[11px] opacity-40">{archived.length}</span>}
           </button>
-        </div>
 
-        <main className="min-w-0">
+          {/* Bulk archive */}
+          {!isReadOnly && !bulkArchiveMode && !weeklyMode && activeSection !== 'archive' && (
+            <button
+              onClick={() => setBulkArchiveMode(true)}
+              className="px-3 py-2 rounded-lg text-sm transition-all duration-150 text-left w-full text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/40 flex items-center gap-1.5"
+            >
+              <Archive size={12} />
+              Bulk archive
+            </button>
+          )}
+        </aside>
+
+        <main className="flex-1 min-w-0">
 
           {activeSection === 'words' ? (
             <>
@@ -553,22 +555,24 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
                     return (
                       <div
                         onClick={() => setSelectedWord(wordOfTheDay)}
-                        className="mb-4 cursor-pointer group relative border border-violet-700/30
-                          animate-aurora animate-featured-glow transition-all duration-150 rounded-xl px-6 py-5"
+                        className="mb-4 cursor-pointer relative bg-[#0c0c10] border border-violet-900/40 overflow-hidden animate-featured-glow transition-all duration-150 rounded-xl px-6 py-5"
                       >
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-4">
-                          word of the day <span className="animate-sparkle">✦</span>
-                        </p>
-                        <p className="text-2xl font-medium text-zinc-100 tracking-tight mb-2">{wordOfTheDay.word}</p>
-                        {wordOfTheDay.definition && (
-                          <p className="text-sm text-zinc-400 leading-relaxed line-clamp-2 mb-3">{wordOfTheDay.definition}</p>
-                        )}
-                        {wordOfTheDay.source_tag && tagColor && (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${tagColor.bg} ${tagColor.text} border ${tagColor.border}`}>
-                            <BookMarked size={9} />
-                            {wordOfTheDay.source_tag}
-                          </span>
-                        )}
+                        <div className="absolute inset-[-20%] aurora-bg pointer-events-none" />
+                        <div className="relative z-10">
+                          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-4">
+                            word of the day <span className="animate-sparkle">✦</span>
+                          </p>
+                          <p className="text-2xl font-medium text-zinc-100 tracking-tight mb-2">{wordOfTheDay.word}</p>
+                          {wordOfTheDay.definition && (
+                            <p className="text-sm text-zinc-400 leading-relaxed line-clamp-2 mb-3">{wordOfTheDay.definition}</p>
+                          )}
+                          {wordOfTheDay.source_tag && tagColor && (
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${tagColor.bg} ${tagColor.text} border ${tagColor.border}`}>
+                              <BookMarked size={9} />
+                              {wordOfTheDay.source_tag}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })()}
