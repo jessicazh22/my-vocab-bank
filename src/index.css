@@ -162,13 +162,34 @@
   animation: card-enter 0.4s ease-out;
 }
 
-/* Word of the day — amber breathing glow */
+/* Word of the day — aurora drifting background */
+@keyframes aurora {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-aurora {
+  background: linear-gradient(
+    135deg,
+    rgba(15, 15, 18, 0.98) 0%,
+    rgba(109, 40, 217, 0.18) 20%,
+    rgba(20, 184, 166, 0.12) 45%,
+    rgba(99, 102, 241, 0.16) 70%,
+    rgba(139, 92, 246, 0.10) 85%,
+    rgba(15, 15, 18, 0.98) 100%
+  );
+  background-size: 300% 300%;
+  animation: aurora 9s ease infinite;
+}
+
+/* Word of the day — violet breathing glow (more intense than regular hover) */
 @keyframes featured-glow {
   0%, 100% {
-    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12), 0 0 20px rgba(245, 158, 11, 0.07);
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.20), 0 0 24px rgba(109, 40, 217, 0.10);
   }
   50% {
-    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.28), 0 0 44px rgba(245, 158, 11, 0.14);
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.45), 0 0 48px rgba(109, 40, 217, 0.22);
   }
 }
 
@@ -179,7 +200,7 @@
 /* ✦ sparkle on word-of-the-day label */
 @keyframes sparkle {
   0%, 100% { opacity: 0.4; }
-  50%       { opacity: 1; text-shadow: 0 0 6px rgba(245, 158, 11, 0.7); }
+  50%       { opacity: 1; text-shadow: 0 0 6px rgba(167, 139, 250, 0.8); }
 }
 
 .animate-sparkle {
