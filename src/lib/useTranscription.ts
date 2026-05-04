@@ -147,16 +147,12 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
         dgQueueRef.current = [];
         // Deepgram is live — kill the Whisper fallback timer
         if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
-        // Stop Web Speech API — Deepgram owns transcription from here
-        if (recognitionRef.current) {
-          try { recognitionRef.current.stop(); } catch { /* ignore */ }
-          recognitionRef.current = null;
-        }
+        // Keep Web Speech API running — it drives interimTranscript so the user
+        // always sees what they're saying. Deepgram will own the committed text.
         // Seed Deepgram committed text with whatever SR captured so far
         if (srCommittedRef.current && !committedRef.current) {
           committedRef.current = srCommittedRef.current;
         }
-        srCommittedRef.current = '';
       };
 
       ws.onmessage = (event) => {
@@ -319,8 +315,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
         srCommittedRef.current = '';
 
         rec.onresult = (event: SpeechRecognitionEvent) => {
-          // Once Deepgram is live, let it own the transcript state
-          if (usingDGRef.current || !isActiveRef.current) return;
+          if (!isActiveRef.current) return;
           let interim = '';
           for (let i = event.resultIndex; i < event.results.length; i++) {
             const result = event.results[i];
@@ -331,8 +326,12 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
               interim += result[0].transcript;
             }
           }
-          setTranscript(srCommittedRef.current);
+          // SR always drives the live interim preview (what the user is saying right now)
           setInterimTranscript(interim.trim());
+          // SR only drives committed text when Deepgram hasn't taken over
+          if (!usingDGRef.current) {
+            setTranscript(srCommittedRef.current);
+          }
         };
 
         rec.onerror = (e: SpeechRecognitionErrorEvent) => {
