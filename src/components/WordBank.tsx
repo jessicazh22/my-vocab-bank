@@ -291,7 +291,7 @@ export default function WordBank({ words, updateWord, deleteWord, archiveWord, u
                   ? 'border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30'
                   : 'border-zinc-700/50 hover:border-red-500/30'
                 : (NAV_SECTIONS.find(s => s.key === section)?.cardGlow ?? 'border-zinc-700/50 hover:border-zinc-600')
-        } ${!isReadOnly && !anySelectMode ? 'cursor-grab active:cursor-grabbing' : ''} ${isCelebrating ? 'animate-celebrate' : ''} ${isExiting ? 'animate-card-exit' : 'animate-card-enter'}`}
+        } ${!isReadOnly && !anySelectMode ? 'cursor-grab active:cursor-grabbing' : ''} ${isCelebrating ? 'animate-celebrate' : ''} ${isExiting ? 'animate-card-exit' : 'animate-card-enter'} ${word.word.toLowerCase() === 'wonderment' && !anySelectMode ? 'animate-featured-glow' : ''}`}
       >
         {queueSelectMode && (
           <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
