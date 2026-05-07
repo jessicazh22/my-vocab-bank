@@ -13,7 +13,7 @@ export interface UseTranscriptionReturn {
   isTranscribing: boolean;
   supported: boolean;
   durationSec: number;
-  start: () => void;
+  start: (deviceId?: string) => void;
   stop: () => void;
   reset: () => void;
 }
@@ -215,11 +215,12 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   }, [lang]);
 
   // ── start ─────────────────────────────────────────────────────────────────
-  const start = useCallback(async () => {
+  const start = useCallback(async (deviceId?: string) => {
     if (!supported) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl:  true,
@@ -288,8 +289,8 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
         // Final Whisper call — full audio, authoritative result.
         const blob = new Blob([...allChunksRef.current], { type: mimeTypeRef.current });
         const text = await transcribeViaEdge(blob, mimeTypeRef.current, lang, '');
-        // Fallback chain: Whisper → Deepgram committed → Web Speech API committed
-        const finalText = text || committedRef.current || srCommittedRef.current;
+        // Prefer Deepgram when it was active; Whisper is the fallback for when DG never connected
+        const finalText = committedRef.current || text || srCommittedRef.current;
         srCommittedRef.current = '';
         if (finalText) setTranscript(finalText);
         setIsTranscribing(false);
@@ -325,10 +326,9 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
               interim += result[0].transcript;
             }
           }
-          // SR always drives the live interim preview (what the user is saying right now)
-          setInterimTranscript(interim.trim());
-          // SR only drives committed text when Deepgram hasn't taken over
+          // SR interim only shown before Deepgram connects — Deepgram's is far more accurate
           if (!usingDGRef.current) {
+            setInterimTranscript(interim.trim());
             setTranscript(srCommittedRef.current);
           }
         };
@@ -355,6 +355,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       setIsTranscribing(false);
       setDurationSec(0);
 
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => setDurationSec(s => s + 1), 1000);
 
       // Connect to Deepgram directly. While the key-fetch + handshake is in
@@ -362,6 +363,7 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       connectDeepgram();
 
       // Whisper flush timer — suppressed automatically once Deepgram opens
+      if (flushTimerRef.current) clearInterval(flushTimerRef.current);
       flushTimerRef.current = setInterval(flushWindow, FLUSH_INTERVAL_MS);
 
     } catch (e) {

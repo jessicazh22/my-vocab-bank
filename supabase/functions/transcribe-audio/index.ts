@@ -34,15 +34,9 @@ Deno.serve(async (req: Request) => {
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     const blob = new Blob([bytes], { type: mimeType ?? "audio/webm" });
 
-    // Send to Groq Whisper
-    // If we have previous transcript, use it as the Whisper prompt so the
-    // model has continuity context. Otherwise seed with formatting instructions.
-    const basePrompt =
-      "English language learning session. Non-native speaker. " +
-      "Transcribe with correct punctuation and capitalisation.";
-    const prompt = prevTranscript
-      ? prevTranscript.slice(-200) // last ~200 chars gives Whisper enough context
-      : basePrompt;
+    // Whisper prompt: use the tail of the previous transcript for continuity.
+    // Never use instruction-style text here — Whisper echoes it into the output.
+    const prompt = prevTranscript ? prevTranscript.slice(-200) : "";
 
     const form = new FormData();
     form.append("file", blob, "recording.webm");

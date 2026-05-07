@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Mic, Clock, X, Zap } from 'lucide-react';
 import { useTranscription } from '../lib/useTranscription';
+import { useMicDevices } from '../lib/useMicDevices';
+import MicLevelBar from './MicLevelBar';
 import { usePracticeSession } from '../lib/usePracticeSession';
 import TranscriptPanel from './TranscriptPanel';
 import SessionDetail from './SessionDetail';
@@ -323,6 +325,8 @@ export default function GrammarModule({ userId, locale, view }: Props) {
     start, stop, reset,
   } = useTranscription(locale);
 
+  const { devices, selectedId, setSelectedId, previewStream, deviceError, stopPreview, startPreview } = useMicDevices();
+
   const {
     sessions, loading,
     saveSnippet, deleteSession, updateRecording,
@@ -354,6 +358,11 @@ export default function GrammarModule({ userId, locale, view }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript, isListening, isTranscribing]);
 
+  const handleStartRecording = useCallback(() => {
+    stopPreview();
+    start(selectedId || undefined);
+  }, [stopPreview, start, selectedId]);
+
   // Keyboard shortcut: Space
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -362,11 +371,12 @@ export default function GrammarModule({ userId, locale, view }: Props) {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
       e.preventDefault();
       if      (isListening)                    stop();
-      else if (!isTranscribing && !autoSaving) start();
+      else if (!isTranscribing && !autoSaving) handleStartRecording();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [isListening, isTranscribing, autoSaving, start, stop]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListening, isTranscribing, autoSaving, stop, selectedId]);
 
   // ── Sessions view ──────────────────────────────────────────────────────────
   if (view === 'sessions') {
@@ -554,6 +564,29 @@ export default function GrammarModule({ userId, locale, view }: Props) {
   // ── Coach view — feed ──────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6">
+      {/* Device selector + mic visualizer */}
+      <div className="max-w-2xl mx-auto w-full flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedId}
+            onChange={e => setSelectedId(e.target.value)}
+            className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700/60
+              text-zinc-300 text-xs focus:outline-none focus:border-zinc-600 truncate"
+          >
+            {devices.length === 0 && (
+              <option value="">Requesting mic access…</option>
+            )}
+            {devices.map(d => (
+              <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
+            ))}
+          </select>
+        </div>
+        <MicLevelBar stream={previewStream} />
+        {deviceError && (
+          <p className="text-xs text-rose-400">{deviceError}</p>
+        )}
+      </div>
+
       {/* Toolbar */}
       <div className="max-w-2xl mx-auto w-full flex items-center justify-between gap-4">
         <p className="text-[11px] text-zinc-600">
@@ -594,7 +627,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
               )}
               {supported && (
                 <button
-                  onClick={start}
+                  onClick={handleStartRecording}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium
                     bg-amber-900/30 hover:bg-amber-900/50 text-amber-300 border border-amber-800/40
                     transition-all duration-150 active:scale-95"
@@ -608,7 +641,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
         </div>
       </div>
 
-      <RecordingFeed recordings={allRecordings} loading={loading} userId={userId} onSave={updateRecording} />
+      <RecordingFeed recordings={allRecordings} loading={loading} userId={userId} onSave={updateRecording} onDelete={removeRecording} />
     </div>
   );
 }

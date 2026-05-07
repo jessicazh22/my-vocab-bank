@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic } from 'lucide-react';
+import { Mic, X } from 'lucide-react';
 import type { GrammarSession } from '../lib/grammar';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -61,9 +61,11 @@ export const SPEAKER_COLORS: Record<string, string> = {
 export function RecordingRow({
   rec,
   onSave,
+  onDelete,
 }: {
   rec: GrammarSession;
   onSave: (id: string, text: string) => Promise<void>;
+  onDelete?: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft,   setDraft]   = useState('');
@@ -117,7 +119,7 @@ export function RecordingRow({
 
   return (
     <div
-      className={`flex gap-5 px-5 py-4 transition-colors ${editing ? 'bg-zinc-800/40' : 'hover:bg-zinc-800/25 cursor-text'}`}
+      className={`group flex gap-5 px-5 py-4 transition-colors ${editing ? 'bg-zinc-800/40' : 'hover:bg-zinc-800/25 cursor-text'}`}
       onClick={!editing ? enterEdit : undefined}
     >
       {/* Time + speaker */}
@@ -155,6 +157,16 @@ export function RecordingRow({
           </p>
         )}
       </div>
+
+      {/* Delete */}
+      {onDelete && !editing && (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete(rec.id); }}
+          className="opacity-0 group-hover:opacity-100 shrink-0 self-start mt-0.5 p-1 text-zinc-600 hover:text-rose-400 transition-all"
+        >
+          <X size={13} />
+        </button>
+      )}
     </div>
   );
 }
@@ -162,12 +174,13 @@ export function RecordingRow({
 // ── Recording feed ────────────────────────────────────────────────────────────
 
 export function RecordingFeed({
-  recordings, loading, userId, onSave,
+  recordings, loading, userId, onSave, onDelete,
 }: {
   recordings: GrammarSession[];
   loading: boolean;
   userId: string | null;
   onSave: (id: string, text: string) => Promise<void>;
+  onDelete?: (id: string) => void;
 }) {
   if (!userId) {
     return (
@@ -206,7 +219,7 @@ export function RecordingFeed({
           </p>
           <div className="rounded-xl border border-zinc-800 divide-y divide-zinc-800/80 overflow-hidden bg-zinc-900/40">
             {items.map(rec => (
-              <RecordingRow key={rec.id} rec={rec} onSave={onSave} />
+              <RecordingRow key={rec.id} rec={rec} onSave={onSave} onDelete={onDelete} />
             ))}
           </div>
         </div>

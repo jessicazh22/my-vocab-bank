@@ -173,6 +173,11 @@ export function usePracticeSession(userId: string | null): UsePracticeSessionRet
       ? { ...prev, recordings: prev.recordings.filter(r => r.id !== recordingId) }
       : null
     );
+    setSessions(prev =>
+      prev
+        .map(s => ({ ...s, recordings: s.recordings.filter(r => r.id !== recordingId) }))
+        .filter(s => s.recordings.length > 0)
+    );
     const { error } = await supabase
       .from('grammar_sessions')
       .delete()
