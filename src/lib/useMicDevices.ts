@@ -5,7 +5,7 @@ export interface AudioInputDevice {
   label: string;
 }
 
-export function useMicDevices() {
+export function useMicDevices(enabled = true) {
   const [devices, setDevices]           = useState<AudioInputDevice[]>([]);
   const [selectedId, setSelectedId]     = useState('');
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
@@ -72,18 +72,19 @@ export function useMicDevices() {
   }, []);
 
   useEffect(() => {
+    if (!enabled || !navigator.mediaDevices) return;
     enumerate();
     navigator.mediaDevices.addEventListener('devicechange', enumerate);
     return () => {
-      navigator.mediaDevices.removeEventListener('devicechange', enumerate);
+      navigator.mediaDevices?.removeEventListener('devicechange', enumerate);
       stopPreview();
     };
-  }, [enumerate, stopPreview]);
+  }, [enabled, enumerate, stopPreview]);
 
-  // Start preview whenever selection changes
+  // Start preview whenever selection changes (only when enabled)
   useEffect(() => {
-    if (selectedId) startPreview(selectedId);
-  }, [selectedId, startPreview]);
+    if (enabled && selectedId) startPreview(selectedId);
+  }, [enabled, selectedId, startPreview]);
 
   return { devices, selectedId, setSelectedId, previewStream, deviceError, stopPreview, startPreview };
 }

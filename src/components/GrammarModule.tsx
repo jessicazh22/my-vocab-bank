@@ -325,7 +325,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
     start, stop, reset,
   } = useTranscription(locale);
 
-  const { devices, selectedId, setSelectedId, previewStream, deviceError, stopPreview, startPreview } = useMicDevices();
+  const { devices, selectedId, setSelectedId, previewStream, deviceError, stopPreview, startPreview } = useMicDevices(view === 'coach');
 
   const {
     sessions, loading,
