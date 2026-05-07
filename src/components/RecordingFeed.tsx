@@ -58,6 +58,37 @@ export const SPEAKER_COLORS: Record<string, string> = {
   Student: 'text-sky-400',
 };
 
+const LABEL_COLORS: Record<string, string> = {
+  Gloria:  'text-amber-400',
+  Jessica: 'text-sky-400',
+};
+
+function StyledTranscript({ text }: { text: string }) {
+  const paragraphs = text.split('\n\n').filter(Boolean);
+  const hasSpeakers = paragraphs.some(p => /^(Gloria|Jessica):\s/.test(p));
+  if (!hasSpeakers) return <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">{text}</p>;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {paragraphs.map((para, i) => {
+        const match = para.match(/^(\w+):\s*([\s\S]*)$/);
+        if (match) {
+          const [, name, content] = match;
+          return (
+            <div key={i}>
+              <span className={`text-[11px] font-semibold uppercase tracking-wider mr-2 ${LABEL_COLORS[name] ?? 'text-zinc-400'}`}>
+                {name}
+              </span>
+              <span className="text-sm text-zinc-200 leading-relaxed">{content}</span>
+            </div>
+          );
+        }
+        return <p key={i} className="text-sm text-zinc-200 leading-relaxed">{para}</p>;
+      })}
+    </div>
+  );
+}
+
 export function RecordingRow({
   rec,
   onSave,
@@ -152,9 +183,7 @@ export function RecordingRow({
             </p>
           </>
         ) : (
-          <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
-            {rec.transcript}
-          </p>
+          <StyledTranscript text={rec.transcript} />
         )}
       </div>
 

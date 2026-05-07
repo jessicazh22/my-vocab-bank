@@ -13,6 +13,7 @@ interface Props {
   isTranscribing: boolean;
   durationSec: number;
   onStop: () => void;
+  onSwapSpeakers: () => void;
 }
 
 function formatTime(sec: number): string {
@@ -33,6 +34,7 @@ export default function TranscriptPanel({
   isTranscribing,
   durationSec,
   onStop,
+  onSwapSpeakers,
 }: Props) {
 
   if (isTranscribing) {
@@ -58,6 +60,15 @@ export default function TranscriptPanel({
             <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
           </span>
           <span className="text-sm text-amber-400 font-medium">Recording</span>
+          <button
+            onClick={onSwapSpeakers}
+            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+            title="Swap speaker labels"
+          >
+            <span className="text-amber-400">{speakerNames[0]}</span>
+            {' ⇄ '}
+            <span className="text-sky-400">{speakerNames[1]}</span>
+          </button>
         </div>
         <span className="text-sm text-zinc-500 tabular-nums font-mono">
           {formatTime(durationSec)}

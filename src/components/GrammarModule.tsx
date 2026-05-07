@@ -567,6 +567,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
         isTranscribing={isTranscribing || autoSaving}
         durationSec={durationSec}
         onStop={stop}
+        onSwapSpeakers={() => setGloriaIsFirst(g => !g)}
       />
     );
   }

@@ -70,5 +70,9 @@ export async function callEdgeFunction<T = unknown>(name: string, payload: unkno
     },
     body: JSON.stringify(payload),
   });
-  return res.json() as Promise<T>;
+  const data = await res.json();
+  if (!res.ok || (data && typeof data === 'object' && 'error' in data)) {
+    throw new Error(data?.error ?? `Edge function ${name} failed (${res.status})`);
+  }
+  return data as T;
 }

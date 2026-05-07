@@ -28,7 +28,7 @@ interface EnrichmentResponse {
   scaffoldPrompt: string;
 }
 
-const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "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";
+const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -236,7 +236,7 @@ Rules:
         body: JSON.stringify({
           model: "llama-3.1-8b-instant",
           messages: [{ role: "user", content: definePrompt }],
-          max_tokens: 1200,
+          max_tokens: 1600,
           temperature: 0.3,
         }),
       });
