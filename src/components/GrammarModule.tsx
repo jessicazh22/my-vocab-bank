@@ -325,11 +325,11 @@ export default function GrammarModule({ userId, locale, view }: Props) {
     start, stop, reset,
   } = useTranscription(locale);
 
-  const { devices, selectedId, setSelectedId, previewStream, deviceError, stopPreview, startPreview } = useMicDevices(view === 'coach');
+  const { devices, selectedId, setSelectedId, previewStream, deviceError, stopPreview } = useMicDevices(view === 'coach');
 
   const {
     sessions, loading,
-    saveSnippet, deleteSession, updateRecording,
+    saveSnippet, deleteSession, updateRecording, removeRecording,
     startSession, endSession, activeSession, addRecording,
   } = usePracticeSession(userId);
 
