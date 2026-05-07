@@ -1,5 +1,6 @@
 import { Square, Loader2, AlertTriangle } from 'lucide-react';
 import type { TranscriptSegment } from '../lib/useTranscription';
+import { addParagraphBreaks } from './RecordingFeed';
 
 const WARN_SEC   = 20 * 60; // 20 min — soft warning
 const STRONG_SEC = 25 * 60; // 25 min — strong prompt
@@ -106,19 +107,27 @@ export default function TranscriptPanel({
           <p className="text-zinc-600 italic">Start speaking — your words will appear here…</p>
         ) : segments.length > 0 ? (
           <>
-            {segments.map((seg, i) => (
-              <div key={i}>
-                <span className={`text-[11px] font-semibold uppercase tracking-wider mr-2 ${
-                  seg.speaker === 0 ? 'text-amber-400' : 'text-sky-400'
-                }`}>
-                  {speakerNames[seg.speaker] ?? `Speaker ${seg.speaker}`}
-                </span>
-                <span className="text-zinc-200">{seg.text}</span>
-                {i === segments.length - 1 && interimTranscript && (
-                  <span className="text-zinc-500 italic"> {interimTranscript}</span>
-                )}
-              </div>
-            ))}
+            {segments.map((seg, i) => {
+              const isLast = i === segments.length - 1;
+              const paras = addParagraphBreaks(seg.text).split('\n\n').filter(Boolean);
+              return (
+                <div key={i} className="flex flex-col gap-0.5">
+                  <span className={`text-[11px] font-semibold uppercase tracking-wider ${
+                    seg.speaker === 0 ? 'text-amber-400' : 'text-sky-400'
+                  }`}>
+                    {speakerNames[seg.speaker] ?? `Speaker ${seg.speaker}`}
+                  </span>
+                  {paras.map((para, j) => (
+                    <p key={j} className="text-zinc-200 leading-relaxed">
+                      {para}
+                      {isLast && j === paras.length - 1 && interimTranscript && (
+                        <span className="text-zinc-500 italic"> {interimTranscript}</span>
+                      )}
+                    </p>
+                  ))}
+                </div>
+              );
+            })}
           </>
         ) : (
           // Deepgram not yet connected — flat fallback

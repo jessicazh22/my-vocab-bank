@@ -1,8 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, X } from 'lucide-react';
+import { Mic, X, ArrowLeftRight } from 'lucide-react';
 import type { GrammarSession } from '../lib/grammar';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+export function addParagraphBreaks(text: string): string {
+  if (text.length < 100) return text;
+  // Split at sentence-ending punctuation followed by a capital letter
+  const sentences = text.split(/(?<=[.?!])\s+(?=[A-Z])/);
+  if (sentences.length <= 1) return text;
+  const paras: string[] = [];
+  let current = '';
+  for (const sent of sentences) {
+    current = current ? `${current} ${sent}` : sent;
+    if (current.length >= 80) {
+      paras.push(current);
+      current = '';
+    }
+  }
+  if (current) paras.push(current);
+  return paras.join('\n\n');
+}
 
 export function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear()
@@ -66,20 +84,32 @@ const LABEL_COLORS: Record<string, string> = {
 function StyledTranscript({ text }: { text: string }) {
   const paragraphs = text.split('\n\n').filter(Boolean);
   const hasSpeakers = paragraphs.some(p => /^(Gloria|Jessica):\s/.test(p));
-  if (!hasSpeakers) return <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">{text}</p>;
+  if (!hasSpeakers) {
+    const paras = addParagraphBreaks(text).split('\n\n').filter(Boolean);
+    return (
+      <div className="flex flex-col gap-2">
+        {paras.map((p, i) => (
+          <p key={i} className="text-sm text-zinc-200 leading-relaxed">{p}</p>
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {paragraphs.map((para, i) => {
         const match = para.match(/^(\w+):\s*([\s\S]*)$/);
         if (match) {
           const [, name, content] = match;
+          const contentParas = addParagraphBreaks(content).split('\n\n').filter(Boolean);
           return (
-            <div key={i}>
-              <span className={`text-[11px] font-semibold uppercase tracking-wider mr-2 ${LABEL_COLORS[name] ?? 'text-zinc-400'}`}>
+            <div key={i} className="flex flex-col gap-0.5">
+              <span className={`text-[11px] font-semibold uppercase tracking-wider ${LABEL_COLORS[name] ?? 'text-zinc-400'}`}>
                 {name}
               </span>
-              <span className="text-sm text-zinc-200 leading-relaxed">{content}</span>
+              {contentParas.map((p, j) => (
+                <p key={j} className="text-sm text-zinc-200 leading-relaxed">{p}</p>
+              ))}
             </div>
           );
         }
@@ -187,14 +217,32 @@ export function RecordingRow({
         )}
       </div>
 
-      {/* Delete */}
-      {onDelete && !editing && (
-        <button
-          onClick={e => { e.stopPropagation(); onDelete(rec.id); }}
-          className="opacity-0 group-hover:opacity-100 shrink-0 self-start mt-0.5 p-1 text-zinc-600 hover:text-rose-400 transition-all"
-        >
-          <X size={13} />
-        </button>
+      {/* Swap + Delete */}
+      {!editing && (
+        <div className="opacity-0 group-hover:opacity-100 shrink-0 self-start mt-0.5 flex items-center gap-0.5 transition-all">
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              const swapped = rec.transcript
+                .replace(/^Gloria:/gm, '\x00T\x00')
+                .replace(/^Jessica:/gm, 'Gloria:')
+                .replace(/^\x00T\x00/gm, 'Jessica:');
+              onSave(rec.id, swapped);
+            }}
+            className="p-1 text-zinc-600 hover:text-sky-400 transition-colors"
+            title="Swap Gloria ⇄ Jessica"
+          >
+            <ArrowLeftRight size={13} />
+          </button>
+          {onDelete && (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(rec.id); }}
+              className="p-1 text-zinc-600 hover:text-rose-400 transition-colors"
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
