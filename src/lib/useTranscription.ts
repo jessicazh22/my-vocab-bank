@@ -6,9 +6,15 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 // Whisper fallback — fires every 6 s when Deepgram is unavailable
 const FLUSH_INTERVAL_MS = 6000;
 
+export interface TranscriptSegment {
+  speaker: number;
+  text: string;
+}
+
 export interface UseTranscriptionReturn {
   transcript: string;
   interimTranscript: string;
+  segments: TranscriptSegment[];
   isListening: boolean;
   isTranscribing: boolean;
   supported: boolean;
@@ -16,6 +22,16 @@ export interface UseTranscriptionReturn {
   start: (deviceId?: string) => void;
   stop: () => void;
   reset: () => void;
+}
+
+function dominantSpeaker(words: Array<{ speaker?: number }>): number {
+  const counts: Record<number, number> = {};
+  for (const w of words) {
+    if (w.speaker != null) counts[w.speaker] = (counts[w.speaker] ?? 0) + 1;
+  }
+  const entries = Object.entries(counts);
+  if (!entries.length) return 0;
+  return Number(entries.sort((a, b) => b[1] - a[1])[0][0]);
 }
 
 // ── Whisper fallback (Groq) ────────────────────────────────────────────────────
@@ -71,6 +87,8 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
   const interimRef   = useRef('');              // current non-final words (for UtteranceEnd)
   const usingDGRef   = useRef(false);           // true once DG WS opens successfully
   const dgQueueRef   = useRef<ArrayBuffer[]>([]); // audio buffered before WS open
+  const segmentsRef  = useRef<TranscriptSegment[]>([]);
+  const [segments, setSegments] = useState<TranscriptSegment[]>([]);
 
   // ── Web Speech API (real-time display, no API key needed) ────────────────
   const recognitionRef  = useRef<SpeechRecognition | null>(null);
@@ -127,10 +145,11 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       dgUrl.searchParams.set('model',            'nova-2-general');
       dgUrl.searchParams.set('language',         lang);
       dgUrl.searchParams.set('interim_results',  'true');
-      dgUrl.searchParams.set('utterance_end_ms', '1000'); // commit pending words after 1 s silence
+      dgUrl.searchParams.set('utterance_end_ms', '1000');
       dgUrl.searchParams.set('smart_format',     'true');
       dgUrl.searchParams.set('punctuate',        'true');
       dgUrl.searchParams.set('endpointing',      '300');
+      dgUrl.searchParams.set('diarize',          'true');
 
       // Auth via WebSocket subprotocol — the Deepgram-supported way
       const ws = new WebSocket(dgUrl.toString(), ['token', key]);
@@ -161,15 +180,28 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
           const data = JSON.parse(event.data as string) as {
             type: string;
             is_final?: boolean;
-            channel?: { alternatives?: Array<{ transcript: string }> };
+            channel?: { alternatives?: Array<{
+              transcript: string;
+              words?: Array<{ word: string; speaker?: number }>;
+            }> };
           };
 
           if (data.type === 'Results') {
-            const text    = data.channel?.alternatives?.[0]?.transcript ?? '';
+            const alt     = data.channel?.alternatives?.[0];
+            const text    = alt?.transcript ?? '';
             const isFinal = data.is_final ?? false;
 
             if (isFinal && text) {
-              // Confirmed words — append to committed transcript
+              const speaker = dominantSpeaker(alt?.words ?? []);
+
+              // Build segments — extend last if same speaker, else new turn
+              const prev = segmentsRef.current;
+              const last = prev[prev.length - 1];
+              segmentsRef.current = (last && last.speaker === speaker)
+                ? [...prev.slice(0, -1), { speaker, text: last.text + ' ' + text.trim() }]
+                : [...prev, { speaker, text: text.trim() }];
+              setSegments([...segmentsRef.current]);
+
               committedRef.current = committedRef.current
                 ? `${committedRef.current} ${text.trim()}`
                 : text.trim();
@@ -177,16 +209,21 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
               setTranscript(committedRef.current);
               setInterimTranscript('');
             } else if (!isFinal && text) {
-              // Live preview — show as italic interim text
               interimRef.current = text.trim();
               setInterimTranscript(text.trim());
             }
           }
 
           if (data.type === 'UtteranceEnd') {
-            // After 1 s of silence Deepgram fires UtteranceEnd. Any words still in
-            // interimRef haven't been finalised — commit them now so nothing is lost.
             if (interimRef.current) {
+              // Append orphaned interim to last segment
+              const prev = segmentsRef.current;
+              const last = prev[prev.length - 1];
+              segmentsRef.current = last
+                ? [...prev.slice(0, -1), { ...last, text: last.text + ' ' + interimRef.current }]
+                : [...prev, { speaker: 0, text: interimRef.current }];
+              setSegments([...segmentsRef.current]);
+
               committedRef.current = committedRef.current
                 ? `${committedRef.current} ${interimRef.current}`
                 : interimRef.current;
@@ -234,6 +271,8 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
       dgQueueRef.current   = [];
       usingDGRef.current   = false;
       isActiveRef.current  = true;
+      segmentsRef.current  = [];
+      setSegments([]);
 
       const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
         .find(t => MediaRecorder.isTypeSupported(t)) ?? '';
@@ -418,6 +457,8 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     setIsListening(false);
     setIsTranscribing(false);
     setDurationSec(0);
+    segmentsRef.current = [];
+    setSegments([]);
   }, [stopTimers]);
 
   useEffect(() => {
@@ -437,5 +478,5 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     };
   }, [stopTimers]);
 
-  return { transcript, interimTranscript, isListening, isTranscribing, supported, durationSec, start, stop, reset };
+  return { transcript, interimTranscript, segments, isListening, isTranscribing, supported, durationSec, start, stop, reset };
 }

@@ -319,11 +319,16 @@ function LearningPlanView({
 // ── Main component ────────────────────────────────────────────────────────────
 export default function GrammarModule({ userId, locale, view }: Props) {
   const {
-    transcript, interimTranscript,
+    transcript, interimTranscript, segments,
     isListening, isTranscribing,
     supported, durationSec,
     start, stop, reset,
   } = useTranscription(locale);
+
+  const [gloriaIsFirst, setGloriaIsFirst] = useState(true);
+  const speakerNames: Record<number, string> = gloriaIsFirst
+    ? { 0: 'Gloria', 1: 'Jessica' }
+    : { 0: 'Jessica', 1: 'Gloria' };
 
   const { devices, selectedId, setSelectedId, previewStream, deviceError, stopPreview } = useMicDevices(view === 'coach');
 
@@ -347,13 +352,17 @@ export default function GrammarModule({ userId, locale, view }: Props) {
     [sessions],
   );
 
-  // Auto-save when Whisper transcript is ready
+  // Auto-save when transcript is ready
   useEffect(() => {
     if (!transcript || isListening || isTranscribing || autoSaving) return;
     setAutoSaving(true);
+    // Use labelled segments if available, otherwise flat transcript
+    const textToSave = segments.length > 0
+      ? segments.map(s => `${speakerNames[s.speaker] ?? `Speaker ${s.speaker}`}: ${s.text}`).join('\n\n')
+      : transcript;
     const save = activeSession
-      ? addRecording(transcript, durationSec, null)
-      : saveSnippet(transcript, durationSec, null);
+      ? addRecording(textToSave, durationSec, null)
+      : saveSnippet(textToSave, durationSec, null);
     save.finally(() => { reset(); setAutoSaving(false); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript, isListening, isTranscribing]);
@@ -553,7 +562,8 @@ export default function GrammarModule({ userId, locale, view }: Props) {
       <TranscriptPanel
         transcript={transcript}
         interimTranscript={interimTranscript}
-        isListening={isListening}
+        segments={segments}
+        speakerNames={speakerNames}
         isTranscribing={isTranscribing || autoSaving}
         durationSec={durationSec}
         onStop={stop}
@@ -580,6 +590,14 @@ export default function GrammarModule({ userId, locale, view }: Props) {
               <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
             ))}
           </select>
+          <button
+            onClick={() => setGloriaIsFirst(g => !g)}
+            className="shrink-0 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700/60
+              text-zinc-500 hover:text-zinc-300 text-xs transition-colors whitespace-nowrap"
+            title="Swap speaker order"
+          >
+            <span className="text-amber-400">G</span> ⇄ <span className="text-sky-400">J</span>
+          </button>
         </div>
         <MicLevelBar stream={previewStream} />
         {deviceError && (

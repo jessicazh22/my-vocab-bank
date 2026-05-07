@@ -1,4 +1,5 @@
 import { Square, Loader2, AlertTriangle } from 'lucide-react';
+import type { TranscriptSegment } from '../lib/useTranscription';
 
 const WARN_SEC   = 20 * 60; // 20 min — soft warning
 const STRONG_SEC = 25 * 60; // 25 min — strong prompt
@@ -7,7 +8,8 @@ const LIMIT_SEC  = 30 * 60; // 30 min — practical Deepgram limit
 interface Props {
   transcript: string;
   interimTranscript: string;
-  isListening: boolean;
+  segments: TranscriptSegment[];
+  speakerNames: Record<number, string>;
   isTranscribing: boolean;
   durationSec: number;
   onStop: () => void;
@@ -26,6 +28,8 @@ function minsLeft(durationSec: number): number {
 export default function TranscriptPanel({
   transcript,
   interimTranscript,
+  segments,
+  speakerNames,
   isTranscribing,
   durationSec,
   onStop,
@@ -86,16 +90,30 @@ export default function TranscriptPanel({
       ) : null}
 
       {/* Transcript area */}
-      <div className="min-h-48 bg-zinc-800/40 border border-zinc-700/60 rounded-xl px-5 py-4 text-sm leading-relaxed">
-        {transcript || interimTranscript ? (
+      <div className="min-h-48 bg-zinc-800/40 border border-zinc-700/60 rounded-xl px-5 py-4 text-sm leading-relaxed flex flex-col gap-3">
+        {segments.length === 0 && !interimTranscript && !transcript ? (
+          <p className="text-zinc-600 italic">Start speaking — your words will appear here…</p>
+        ) : segments.length > 0 ? (
+          <>
+            {segments.map((seg, i) => (
+              <div key={i}>
+                <span className={`text-[11px] font-semibold uppercase tracking-wider mr-2 ${
+                  seg.speaker === 0 ? 'text-amber-400' : 'text-sky-400'
+                }`}>
+                  {speakerNames[seg.speaker] ?? `Speaker ${seg.speaker}`}
+                </span>
+                <span className="text-zinc-200">{seg.text}</span>
+                {i === segments.length - 1 && interimTranscript && (
+                  <span className="text-zinc-500 italic"> {interimTranscript}</span>
+                )}
+              </div>
+            ))}
+          </>
+        ) : (
+          // Deepgram not yet connected — flat fallback
           <p>
             <span className="text-zinc-200">{transcript}</span>
-            {transcript && interimTranscript && ' '}
-            <span className="text-zinc-500 italic">{interimTranscript}</span>
-          </p>
-        ) : (
-          <p className="text-zinc-600 italic">
-            Start speaking — your words will appear here…
+            {interimTranscript && <span className="text-zinc-500 italic"> {interimTranscript}</span>}
           </p>
         )}
       </div>
