@@ -219,14 +219,9 @@ export function useTranscription(locale: string = 'en-AU'): UseTranscriptionRetu
     if (!supported) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl:  true,
-          sampleRate:       16000,
-          channelCount:     1,
-        },
+        audio: deviceId
+          ? { deviceId: { exact: deviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          : { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
 
       streamRef.current    = stream;

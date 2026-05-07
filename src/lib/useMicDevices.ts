@@ -30,7 +30,7 @@ export function useMicDevices(enabled = true) {
     setPreviewStream(null);
 
     navigator.mediaDevices
-      .getUserMedia({ audio: { deviceId: { ideal: deviceId } } })
+      .getUserMedia({ audio: { deviceId: { exact: deviceId } } })
       .then(stream => {
         const track = stream.getAudioTracks()[0];
         if (track) {
