@@ -120,47 +120,37 @@ export const CATEGORY_LABELS: Record<GrammarErrorCategory, string> = {
 // ── Colours — coaching palette, not alarming red ──────────────────────────────
 
 const AMBER  = 'bg-amber-900/30 text-amber-300 border border-amber-800/40';
-const SKY    = 'bg-sky-900/30 text-sky-300 border border-sky-800/40';
-const TEAL   = 'bg-teal-900/30 text-teal-300 border border-teal-800/40';
-const VIOLET = 'bg-violet-900/30 text-violet-300 border border-violet-800/40';
-const ORANGE = 'bg-orange-900/30 text-orange-300 border border-orange-800/40';
 const ZINC   = 'bg-zinc-700/50 text-zinc-300 border border-zinc-600/40';
 
+// All grammar errors use amber. Style suggestions (StyleSuggestion type) use zinc.
 export const CATEGORY_COLORS: Record<GrammarErrorCategory, string> = {
-  // Tense → amber
   tense_consistency:       AMBER,
-  // Articles / determiners → sky
-  article_misuse:          SKY,
-  demonstrative_agreement: SKY,
-  // Nouns / plurals → violet
-  singular_plural:         VIOLET,
-  uncountable_noun:        VIOLET,
-  redundant_words:         VIOLET,
-  // Verbs → teal
-  subject_verb_agreement:  TEAL,
-  verb_pattern:            TEAL,
-  verb_form:               TEAL,
-  verb_choice:             TEAL,
-  verb_missing:            TEAL,
-  verb_redundancy:         TEAL,
-  irregular_verb_form:     TEAL,
-  comparative_form:        TEAL,
-  modal_verb_pattern:      TEAL,
-  subjunctive_errors:      TEAL,
-  // Prepositions / phrasal → amber / orange
+  article_misuse:          AMBER,
+  demonstrative_agreement: AMBER,
+  singular_plural:         AMBER,
+  uncountable_noun:        AMBER,
+  redundant_words:         AMBER,
+  subject_verb_agreement:  AMBER,
+  verb_pattern:            AMBER,
+  verb_form:               AMBER,
+  verb_choice:             AMBER,
+  verb_missing:            AMBER,
+  verb_redundancy:         AMBER,
+  irregular_verb_form:     AMBER,
+  comparative_form:        AMBER,
+  modal_verb_pattern:      AMBER,
+  subjunctive_errors:      AMBER,
   preposition_errors:      AMBER,
-  phrasal_verb_errors:     ORANGE,
-  // Structure / conjunctions → zinc
+  phrasal_verb_errors:     AMBER,
   parallel_structure:      ZINC,
   sentence_structure:      ZINC,
   word_order:              ZINC,
   conjunction_misuse:      ZINC,
   conjunction_missing:     ZINC,
-  // Pronouns / reference / word → sky
-  pronoun_form:            SKY,
-  vague_reference:         SKY,
-  word_choice:             SKY,
-  word_form:               SKY,
+  pronoun_form:            AMBER,
+  vague_reference:         AMBER,
+  word_choice:             AMBER,
+  word_form:               AMBER,
 };
 
 export const STYLE_SUGGESTION_LABELS: Record<StyleSuggestion['suggestion_type'], string> = {
