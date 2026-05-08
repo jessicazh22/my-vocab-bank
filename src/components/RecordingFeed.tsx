@@ -13,7 +13,7 @@ export function addParagraphBreaks(text: string): string {
   let current = '';
   for (const sent of sentences) {
     current = current ? `${current} ${sent}` : sent;
-    if (current.length >= 80) {
+    if (current.length >= 220) {
       paras.push(current);
       current = '';
     }
@@ -288,7 +288,7 @@ export function RecordingFeed({
   const groups = groupByDate(recordings);
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-7">
+    <div className="max-w-4xl mx-auto flex flex-col gap-7">
       {groups.map(({ key, label, items }) => (
         <div key={key} className="flex flex-col gap-2.5">
           <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
