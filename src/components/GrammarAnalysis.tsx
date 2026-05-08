@@ -31,11 +31,11 @@ const CORRECTION_TEXT: Record<GrammarErrorCategory, string> = {
   comparative_form:        'text-amber-300',
   preposition_errors:      'text-amber-300',
   phrasal_verb_errors:     'text-amber-300',
-  conjunction_misuse:      'text-zinc-400',
-  conjunction_missing:     'text-zinc-400',
-  parallel_structure:      'text-zinc-400',
-  sentence_structure:      'text-zinc-400',
-  word_order:              'text-zinc-400',
+  conjunction_misuse:      'text-sky-300',
+  conjunction_missing:     'text-sky-300',
+  parallel_structure:      'text-sky-300',
+  sentence_structure:      'text-sky-300',
+  word_order:              'text-sky-300',
   pronoun_form:            'text-amber-300',
   subjunctive_errors:      'text-amber-300',
   word_form:               'text-amber-300',
@@ -228,10 +228,22 @@ export default function GrammarAnalysis({ session, onBack, backLabel = 'Sessions
         <h1 className="text-[17px] font-semibold text-zinc-100 tracking-tight mb-1.5">
           IELTS Practice — {session.date}
         </h1>
-        <p className="text-xs text-zinc-600 mb-12">
+        <p className="text-xs text-zinc-600 mb-5">
           {session.errors.length} correction{session.errors.length !== 1 ? 's' : ''}
           {session.positive.length > 0 && <> · {session.positive.length} highlights</>}
         </p>
+
+        {/* Colour key */}
+        <div className="flex items-center gap-5 mb-12">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400/80 flex-shrink-0" />
+            <span className="text-[11px] text-zinc-500">Grammar error</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-sky-400/80 flex-shrink-0" />
+            <span className="text-[11px] text-zinc-500">Style / phrasing</span>
+          </div>
+        </div>
 
         {/* Annotated transcript — one <p> per paragraph */}
         <div className="flex flex-col gap-7 max-w-2xl">

@@ -119,10 +119,10 @@ export const CATEGORY_LABELS: Record<GrammarErrorCategory, string> = {
 
 // ── Colours — coaching palette, not alarming red ──────────────────────────────
 
-const AMBER  = 'bg-amber-900/30 text-amber-300 border border-amber-800/40';
-const ZINC   = 'bg-zinc-700/50 text-zinc-300 border border-zinc-600/40';
+const AMBER = 'bg-amber-900/30 text-amber-300 border border-amber-800/40';
+const SKY   = 'bg-sky-900/30 text-sky-300 border border-sky-800/40';
 
-// All grammar errors use amber. Style suggestions (StyleSuggestion type) use zinc.
+// Grammar errors → amber. Style / phrasing errors → sky.
 export const CATEGORY_COLORS: Record<GrammarErrorCategory, string> = {
   tense_consistency:       AMBER,
   article_misuse:          AMBER,
@@ -142,11 +142,11 @@ export const CATEGORY_COLORS: Record<GrammarErrorCategory, string> = {
   subjunctive_errors:      AMBER,
   preposition_errors:      AMBER,
   phrasal_verb_errors:     AMBER,
-  parallel_structure:      ZINC,
-  sentence_structure:      ZINC,
-  word_order:              ZINC,
-  conjunction_misuse:      ZINC,
-  conjunction_missing:     ZINC,
+  parallel_structure:      SKY,
+  sentence_structure:      SKY,
+  word_order:              SKY,
+  conjunction_misuse:      SKY,
+  conjunction_missing:     SKY,
   pronoun_form:            AMBER,
   vague_reference:         AMBER,
   word_choice:             AMBER,
