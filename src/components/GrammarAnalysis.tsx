@@ -44,6 +44,15 @@ const CORRECTION_TEXT: Record<GrammarErrorCategory, string> = {
 };
 
 
+// True when a deleted word has no replacement — the word was simply omitted.
+// A substitution always has an `add` part immediately after the `del` (or after
+// a single space `same`). An omission has nothing following it but `same` parts.
+function isPureOmission(parts: DiffPart[], idx: number): boolean {
+  const next1 = parts[idx + 1];
+  const next2 = parts[idx + 2];
+  return next1?.type !== 'add' && !(next1?.type === 'same' && next2?.type === 'add');
+}
+
 // ── Segment builder ───────────────────────────────────────────────────────────
 
 type Segment =
@@ -118,7 +127,10 @@ function ErrorSidebar({
               p.type === 'same' ? (
                 <span key={i} className="text-zinc-300">{p.text}</span>
               ) : p.type === 'del' ? (
-                <span key={i} className="text-zinc-600 line-through">{p.text}</span>
+                <span key={i} className={isPureOmission(diffParts, i)
+                  ? 'text-rose-400/80 line-through decoration-rose-500'
+                  : 'text-zinc-600 line-through'
+                }>{p.text}</span>
               ) : (
                 <span key={i} className={`font-semibold ${correctionColor}`}>{p.text}</span>
               ),
@@ -243,6 +255,10 @@ export default function GrammarAnalysis({ session, onBack, backLabel = 'Sessions
             <span className="w-2 h-2 rounded-full bg-sky-400/80 flex-shrink-0" />
             <span className="text-[11px] text-zinc-500">Style / phrasing</span>
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-rose-400/80 line-through">word</span>
+            <span className="text-[11px] text-zinc-500">= remove this word</span>
+          </div>
         </div>
 
         {/* Annotated transcript — one <p> per paragraph */}
@@ -271,7 +287,10 @@ export default function GrammarAnalysis({ session, onBack, backLabel = 'Sessions
                       p.type === 'same' ? (
                         <span key={di}>{p.text}</span>
                       ) : p.type === 'del' ? (
-                        <span key={di} className="text-zinc-600 line-through decoration-zinc-700">
+                        <span key={di} className={isPureOmission(diffParts, di)
+                          ? 'text-rose-400/80 line-through decoration-rose-500'
+                          : 'text-zinc-600 line-through decoration-zinc-700'
+                        }>
                           {p.text}
                         </span>
                       ) : (
