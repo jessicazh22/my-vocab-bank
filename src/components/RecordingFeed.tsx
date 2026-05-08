@@ -22,6 +22,22 @@ export function addParagraphBreaks(text: string): string {
   return paras.join('\n\n');
 }
 
+// Format a stored transcript for the editing textarea — applies paragraph
+// breaks as single \n within each speaker block so the textarea is readable.
+function formatForEdit(text: string): string {
+  const blocks = text.split('\n\n').filter(Boolean);
+  return blocks.map(block => {
+    const match = block.match(/^(\w+):\s*([\s\S]*)$/);
+    if (!match) return block;
+    const [, name, content] = match;
+    // Only add breaks if content doesn't already have them
+    const formatted = content.includes('\n')
+      ? content
+      : addParagraphBreaks(content).replace(/\n\n/g, '\n');
+    return `${name}: ${formatted}`;
+  }).join('\n\n');
+}
+
 export function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear()
     && a.getMonth()      === b.getMonth()
@@ -101,7 +117,10 @@ function StyledTranscript({ text }: { text: string }) {
         const match = para.match(/^(\w+):\s*([\s\S]*)$/);
         if (match) {
           const [, name, content] = match;
-          const contentParas = addParagraphBreaks(content).split('\n\n').filter(Boolean);
+          // If already has \n breaks (edited), use those; otherwise auto-break
+          const contentParas = content.includes('\n')
+            ? content.split('\n').filter(Boolean)
+            : addParagraphBreaks(content).split('\n\n').filter(Boolean);
           return (
             <div key={i} className="flex flex-col gap-0.5">
               <span className={`text-[11px] font-semibold uppercase tracking-wider ${LABEL_COLORS[name] ?? 'text-zinc-400'}`}>
@@ -145,7 +164,7 @@ export function RecordingRow({
   }, []);
 
   const enterEdit = () => {
-    setDraft(rec.transcript);
+    setDraft(formatForEdit(rec.transcript));
     setEditing(true);
   };
 
@@ -160,7 +179,7 @@ export function RecordingRow({
 
   const commitSave = useCallback(async () => {
     if (saving) return;
-    if (draft === rec.transcript) { setEditing(false); return; }
+    if (draft === rec.transcript || draft === formatForEdit(rec.transcript)) { setEditing(false); return; }
     setSaving(true);
     await onSave(rec.id, draft);
     setSaving(false);
@@ -168,10 +187,6 @@ export function RecordingRow({
   }, [draft, rec.transcript, rec.id, onSave, saving]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      commitSave();
-    }
     if (e.key === 'Escape') {
       setEditing(false);
       setDraft('');
@@ -209,7 +224,7 @@ export function RecordingRow({
                 transition-colors pb-0.5"
             />
             <p className="text-[10px] text-zinc-600 select-none">
-              {saving ? 'Saving…' : '↵ save · Esc cancel'}
+              {saving ? 'Saving…' : 'click away to save · Esc cancel'}
             </p>
           </>
         ) : (
