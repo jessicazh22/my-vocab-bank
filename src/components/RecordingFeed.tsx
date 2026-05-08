@@ -22,15 +22,31 @@ export function addParagraphBreaks(text: string): string {
   return paras.join('\n\n');
 }
 
-// Format a stored transcript for the editing textarea — applies paragraph
-// breaks as single \n within each speaker block so the textarea is readable.
-function formatForEdit(text: string): string {
-  const blocks = text.split('\n\n').filter(Boolean);
-  return blocks.map(block => {
+// Parse and merge consecutive same-speaker blocks into a single block each.
+// Returns [{name, content}] where unlabelled text has name=''.
+function parseSpeakerBlocks(text: string): { name: string; content: string }[] {
+  const rawBlocks = text.split('\n\n').filter(Boolean);
+  const merged: { name: string; content: string }[] = [];
+  for (const block of rawBlocks) {
     const match = block.match(/^(\w+):\s*([\s\S]*)$/);
-    if (!match) return block;
-    const [, name, content] = match;
-    // Only add breaks if content doesn't already have them
+    const name    = match ? match[1] : '';
+    const content = match ? match[2].trim() : block.trim();
+    const last = merged[merged.length - 1];
+    if (last && last.name === name && name) {
+      last.content = `${last.content} ${content}`;
+    } else {
+      merged.push({ name, content });
+    }
+  }
+  return merged;
+}
+
+// Format a stored transcript for the editing textarea — merges consecutive
+// same-speaker utterances and applies paragraph breaks so the textarea matches
+// what the display view shows.
+function formatForEdit(text: string): string {
+  return parseSpeakerBlocks(text).map(({ name, content }) => {
+    if (!name) return content;
     const formatted = content.includes('\n')
       ? content
       : addParagraphBreaks(content).replace(/\n\n/g, '\n');
@@ -98,8 +114,9 @@ const LABEL_COLORS: Record<string, string> = {
 };
 
 function StyledTranscript({ text }: { text: string }) {
-  const paragraphs = text.split('\n\n').filter(Boolean);
-  const hasSpeakers = paragraphs.some(p => /^(Gloria|Jessica):\s/.test(p));
+  const blocks = parseSpeakerBlocks(text);
+  const hasSpeakers = blocks.some(b => b.name !== '');
+
   if (!hasSpeakers) {
     const paras = addParagraphBreaks(text).split('\n\n').filter(Boolean);
     return (
@@ -113,26 +130,22 @@ function StyledTranscript({ text }: { text: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {paragraphs.map((para, i) => {
-        const match = para.match(/^(\w+):\s*([\s\S]*)$/);
-        if (match) {
-          const [, name, content] = match;
-          // If already has \n breaks (edited), use those; otherwise auto-break
-          const contentParas = content.includes('\n')
-            ? content.split('\n').filter(Boolean)
-            : addParagraphBreaks(content).split('\n\n').filter(Boolean);
-          return (
-            <div key={i} className="flex flex-col gap-0.5">
-              <span className={`text-[11px] font-semibold uppercase tracking-wider ${LABEL_COLORS[name] ?? 'text-zinc-400'}`}>
-                {name}
-              </span>
-              {contentParas.map((p, j) => (
-                <p key={j} className="text-sm text-zinc-200 leading-relaxed">{p}</p>
-              ))}
-            </div>
-          );
-        }
-        return <p key={i} className="text-sm text-zinc-200 leading-relaxed">{para}</p>;
+      {blocks.map(({ name, content }, i) => {
+        if (!name) return <p key={i} className="text-sm text-zinc-200 leading-relaxed">{content}</p>;
+        // If already has \n breaks (edited), use those; otherwise auto-break
+        const contentParas = content.includes('\n')
+          ? content.split('\n').filter(Boolean)
+          : addParagraphBreaks(content).split('\n\n').filter(Boolean);
+        return (
+          <div key={i} className="flex flex-col gap-0.5">
+            <span className={`text-[11px] font-semibold uppercase tracking-wider ${LABEL_COLORS[name] ?? 'text-zinc-400'}`}>
+              {name}
+            </span>
+            {contentParas.map((p, j) => (
+              <p key={j} className="text-sm text-zinc-200 leading-relaxed">{p}</p>
+            ))}
+          </div>
+        );
       })}
     </div>
   );
