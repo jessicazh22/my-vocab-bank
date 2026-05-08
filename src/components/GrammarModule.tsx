@@ -512,7 +512,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
           <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium px-1">
             Sample sessions
           </p>
-          {GLORIA_SESSIONS.map(s => (
+          {[...GLORIA_SESSIONS].reverse().map(s => (
             <div
               key={s.id}
               onClick={() => setSelectedAnalysisId(s.id)}
@@ -523,6 +523,7 @@ export default function GrammarModule({ userId, locale, view }: Props) {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <span className="text-xs text-zinc-500">{s.speaker}</span>
+                  <span className="text-[11px] text-zinc-700">{s.date}</span>
                 </div>
                 <span className="text-[11px] text-zinc-700">
                   {s.errors.length} error{s.errors.length !== 1 ? 's' : ''}
