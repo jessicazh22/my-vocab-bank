@@ -12,6 +12,9 @@ export interface Swap {
 
 export interface Feedback {
   correct: boolean;
+  partial?: boolean;       // amber dot — correct usage, phrasing could improve
+  message?: string;        // overrides default verdict text
+  note?: string;           // shown below swaps (shared reason / extra note)
   meaningCorrection?: string | null;
   structureNote?: string | null;
   swaps: Swap[];

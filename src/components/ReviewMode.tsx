@@ -281,10 +281,37 @@ export default function ReviewMode({ words, mode, onClose, practiceWord }: Revie
     setReviewFeedback(null);
   };
 
+  const HARDCODED_FEEDBACK: Array<{ word: string; sentence: string; feedback: Feedback }> = [
+    {
+      word: 'candid',
+      sentence: 'Whilst most employees tiptoed around the CEO because she was prone to outbursts, the new employee was refreshingly candid with her and told her off for her behaviour.',
+      feedback: {
+        correct: true,
+        partial: true,
+        message: 'Close! You used the word correctly, but the phrasing could be improved.',
+        swaps: [
+          { original: 'tiptoed around', improved: 'carefully measured their words', reason: '' },
+          { original: 'told her off', improved: 'openly reproached her', reason: '' },
+        ],
+        note: 'more accurately conveys the difficulty',
+      },
+    },
+  ];
+
   const handleReviewSubmit = async () => {
     if (!reviewSentence.trim()) return;
     setReviewEvaluating(true);
     try {
+      const normalise = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+      const hardcoded = HARDCODED_FEEDBACK.find(
+        h =>
+          normalise(h.word) === normalise(currentWord.word) &&
+          normalise(h.sentence) === normalise(reviewSentence)
+      );
+      if (hardcoded) {
+        setReviewFeedback(hardcoded.feedback);
+        return;
+      }
       const data = await callEdgeFunction<Feedback>('evaluate-sentence', {
         word: currentWord.word,
         definition: currentWord.definition,

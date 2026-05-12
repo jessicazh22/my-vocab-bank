@@ -33,13 +33,13 @@ export default function SentenceFeedback({
     <div className="space-y-3">
       {/* Verdict line */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className={`p-1 rounded-full shrink-0 ${feedback.correct ? 'bg-emerald-600' : 'bg-rose-600'}`}>
-          {feedback.correct
+        <div className={`p-1 rounded-full shrink-0 ${feedback.partial ? 'bg-amber-500' : feedback.correct ? 'bg-emerald-600' : 'bg-rose-600'}`}>
+          {feedback.correct || feedback.partial
             ? <Check size={12} className="text-white" />
             : <X size={12} className="text-white" />}
         </div>
         <span className="text-xs text-zinc-400">
-          {feedback.correct ? 'Used correctly.' : 'Check the meaning.'}
+          {feedback.message ?? (feedback.correct ? 'Used correctly.' : 'Check the meaning.')}
         </span>
         {feedback.structureNote && (
           <span className="text-xs text-zinc-600 italic">— {feedback.structureNote}</span>
@@ -65,9 +65,12 @@ export default function SentenceFeedback({
             <p key={i} className="text-xs text-zinc-500 flex items-baseline gap-1.5 flex-wrap">
               <span className="line-through text-zinc-600 shrink-0">{swap.original}</span>
               <span className="text-zinc-300 shrink-0">→ {swap.improved}</span>
-              <span className="text-zinc-600">— {swap.reason}</span>
+              {swap.reason && <span className="text-zinc-600">— {swap.reason}</span>}
             </p>
           ))}
+          {feedback.note && (
+            <p className="text-xs text-zinc-600 italic">— {feedback.note}</p>
+          )}
         </div>
       )}
 
